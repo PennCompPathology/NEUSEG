@@ -1,7 +1,7 @@
 # NEUSEG (Hitopathology WSI GM/WM Segmentation)
 **Interpretable Unsupervised GM/WM Segmentation in Brain Histopathology Using Nuclei Morphometrics**
 
-NEUSEG is a **fully automated, unsupervised, and interpretable pipeline** for gray matter (GM) and white matter (WM) segmentation in brain histopathology whole-slide images (WSIs). The method bridges **cellular-scale nuclei morphometrics** with **tissue-scale segmentation**, enabling robust GM/WM delineation across heterogeneous stains, cortical regions, and neurodegenerative pathologies—without requiring training data or GPUs.
+NEUSEG is a **fully automated, unsupervised, and interpretable pipeline** for gray matter (GM) and white matter (WM) segmentation in brain histopathology whole-slide images (WSIs). The method bridges **cellular-scale nuclei morphometrics** with **tissue-scale segmentation**, enabling robust GM/WM delineation across heterogeneous stains, cortical regions, and neurodegenerative pathologies without requiring training data or GPUs.
 
 ---
 
