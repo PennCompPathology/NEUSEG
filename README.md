@@ -58,7 +58,7 @@ NEUSEG processes each WSI independently using the following steps:
 6. **Contour Extraction**  
    - GM–WM, GM–background, and WM–background boundaries for evaluation and downstream analysis
 ---
-
+<!--
 ## Experimental Evaluation
 
 ### Datasets
@@ -89,7 +89,7 @@ NEUSEG was compared against **BrainSec**, a supervised CNN-based GM/WM segmentat
 - Efficient parallelization across large cohorts  
 
 ---
-
+-->
 ## Why NEUSEG?
 
 - ✅ No training data required  
