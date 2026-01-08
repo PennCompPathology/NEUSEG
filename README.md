@@ -29,7 +29,7 @@ NEUSEG addresses these challenges by providing a **lightweight, CPU-operable, an
 ---
 
 ## Method Overview
-
+![NEUSEG pipeline](figures/Figure1.png)
 NEUSEG processes each WSI independently using the following steps:
 
 1. **Tissue Extraction**  
@@ -37,10 +37,12 @@ NEUSEG processes each WSI independently using the following steps:
    - Global thresholding to separate tissue from background  
 
 2. **Nuclei Segmentation & Feature Extraction**  
-   - Watershed-based nuclei segmentation on non-overlapping patches  
-   - Extraction of two morphometric features:  
+   - **Enhance nuclear contrast (pre-processing):** apply **triangular thresholding** to the **hematoxylin channel** within the tissue mask to generate an intensity map that highlights nuclei (neurons + glia)  
+   - **Nuclei instance segmentation:** perform **watershed-based segmentation** on non-overlapping patches  
+   - **Morphometric feature extraction:** compute  
      - Nuclear size  
-     - Local nuclear density  
+     - Local nuclear density
+
 
 3. **Feature Aggregation**  
    - Gaussian smoothing to generate spatial maps of nuclei size and density at lower resolution  
@@ -54,8 +56,7 @@ NEUSEG processes each WSI independently using the following steps:
    - Morphological post-processing to remove artifacts and small disconnected regions  
 
 6. **Contour Extraction**  
-   - GM–WM, GM–background, and WM–background boundaries for evaluation and downstream analysis  
-
+   - GM–WM, GM–background, and WM–background boundaries for evaluation and downstream analysis
 ---
 
 ## Experimental Evaluation
@@ -98,6 +99,10 @@ NEUSEG was compared against **BrainSec**, a supervised CNN-based GM/WM segmentat
 - ✅ Suitable for downstream quantitative pathology analyses  
 
 NEUSEG is particularly well-suited for large-scale studies where **reproducibility, robustness, and interpretability** are essential.
+
+---
+
+## Code Usage
 
 ---
 
