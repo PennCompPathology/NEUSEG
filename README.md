@@ -101,14 +101,6 @@ NEUSEG is particularly well-suited for large-scale studies where **reproducibili
 
 ---
 
-## Availability
-
-- **Paper**: ISBI 2026 submission  
-- **Code**: https://github.com/HyungSeokRoh/NEUSEG  
-- **Implementation**: Python (CPU-only)
-
----
-
 ## Citation
 
 If you use NEUSEG in your work, please cite:
