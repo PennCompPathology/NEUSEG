@@ -132,7 +132,8 @@ From the root of the repository, execute:
 bash script/neuseg_script.sh
 ```
 3. **Outputs**  
-   After successful execution, the pipeline generates the following output directory: **GM_WM_Seg_Results/**  
+   After successful execution, the pipeline generates the following output directory: **GM_WM_Seg_Results/**
+   
    This directory contains the final **gray matter (GM) / white matter (WM) segmentation results** produced from the input whole-slide images (WSIs) inside **[`Data/`](Data/)** directory.
 
 ## Citation
