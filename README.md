@@ -104,7 +104,36 @@ NEUSEG is particularly well-suited for large-scale studies where **reproducibili
 
 ## Code Usage
 
----
+This repository provides an end-to-end pipeline for **unsupervised GM/WM segmentation** from brain histopathology whole-slide images (WSIs) using nuclei morphometrics.
+
+### Core Scripts
+
+- **[`script/Nuclei_Segmentation.py`](script/Nuclei_Segmentation.py)**  
+  Performs nuclei segmentation from histopathology WSIs. This step generates nuclei masks and extracts morphometric features (e.g., nuclear size and local nuclear density), which are used as inputs for downstream tissue segmentation.
+
+- **[`script/GMM_Segmentation.py`](script/GMM_Segmentation.py)**  
+  Performs GM/WM segmentation using a Gaussian Mixture Model (GMM) based on features derived from the nuclei segmentation results.
+
+- **[`script/neuseg_script.sh`](script/neuseg_script.sh)**  
+  Wrapper shell script that runs the full NEUSEG pipeline, including nuclei segmentation followed by GMM-based GM/WM segmentation.
+
+### Running the Pipeline
+
+1. **Prepare input data**  
+   Place the `.svs` whole-slide images to be processed inside the **[`Data/`](Data/)** directory:
+```text
+NEUSEG/
+├── Data/
+│   └── *.svs
+```
+2. **Run NEUSEG**  
+From the root of the repository, execute:
+```bash
+bash script/neuseg_script.sh
+```
+3. **Outputs**  
+   After successful execution, the pipeline generates the following output directory: **GM_WM_Seg_Results/**  
+   This directory contains the final **gray matter (GM) / white matter (WM) segmentation results** produced from the input whole-slide images (WSIs) inside **[`Data/`](Data/)** directory.
 
 ## Citation
 
