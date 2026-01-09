@@ -6,10 +6,8 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 project_root="$(dirname "$script_dir")"
 
 # Input and output directories relative to project root
-# WSIS_DIR="$project_root/Data_bvFTD_TDP" # .svs files (WSI)
-WSIS_DIR="$project_root/2020-016" # .svs files (WSI)
-# OUTPUT_ROOT="$project_root/GM_WM_Seg_Results"
-OUTPUT_ROOT="$project_root/GM_WM_Seg_Results_bvFTD_TAU_2020-016"
+WSIS_DIR="$project_root/Data" # .svs files (WSI)
+OUTPUT_ROOT="$project_root/GM_WM_Seg_Results"
 
 echo "WSIS_DIR: $WSIS_DIR"
 echo "OUTPUT_ROOT: $OUTPUT_ROOT"
