@@ -138,9 +138,10 @@ bash script/neuseg_script.sh
 ## Citation
 
 If you use NEUSEG in your work, please cite:
+```text
 Roh, H. S., Capp, N., Ohm, D. T., Irwin, D. J., Gee, J. C., & Chen, M.
 NEUSEG: Interpretable Unsupervised GM/WM Segmentation in Brain Histopathology Using Nuclei Morphometrics.
-
+```
 
 ---
 
