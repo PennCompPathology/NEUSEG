@@ -37,7 +37,7 @@ FAIL_PRE=()
 FAIL_SEG=()
 
 # ---------- Step 1: Nuclei Segmentation ----------
-nuclei_py="$script_dir/Nuclei_Segmentation_110725.py"
+nuclei_py="$script_dir/Nuclei_Segmentation.py"
 
 for i in "${!slides[@]}"; do
   slide="${slides[$i]}"
@@ -57,7 +57,7 @@ for i in "${!slides[@]}"; do
 done
 
 # ---------- Step 2: GMM Segmentation ----------
-gmm_py="$script_dir/GMM_Segmentation_110725.py"
+gmm_py="$script_dir/GMM_Segmentation.py"
 
 # GMM debug outputs
 GMM_DEBUG_ROOT="$project_root/GMM_Debug"
