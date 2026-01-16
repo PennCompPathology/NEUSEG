@@ -4,40 +4,83 @@ os.environ["OPENBLAS_NUM_THREADS"]      = "1"
 os.environ["OMP_NUM_THREADS"]           = "1"
 os.environ["MKL_NUM_THREADS"]           = "1"
 
-import argparse
-import time
-import numpy as np
-from matplotlib import pyplot as plt
-from matplotlib.patches import Ellipse
-from skimage.transform import resize
-from scipy.stats import norm
-from scipy.ndimage import gaussian_filter, distance_transform_edt, label
-import matplotlib.patches as mpatches
-from scipy.ndimage import binary_dilation
-from sklearn.preprocessing import StandardScaler
-from sklearn.mixture import GaussianMixture
-import math
-import maxflow
-from matplotlib.colors import ListedColormap
-from matplotlib.patches import Patch
-from matplotlib.colors import to_rgba
-from diptest import diptest
-from typing import Optional
+# import argparse
+# import time
+# import numpy as np
+# from matplotlib import pyplot as plt
+# from matplotlib.patches import Ellipse
+# from skimage.transform import resize
+# from scipy.stats import norm
+# from scipy.ndimage import gaussian_filter, distance_transform_edt, label
+# import matplotlib.patches as mpatches
+# from scipy.ndimage import binary_dilation
+# from sklearn.preprocessing import StandardScaler
+# from sklearn.mixture import GaussianMixture
+# import math
+# import maxflow
+# from matplotlib.colors import ListedColormap
+# from matplotlib.patches import Patch
+# from matplotlib.colors import to_rgba
+# from diptest import diptest
+# from typing import Optional
 
-import json
-import datetime
+# import json
+# import datetime
 
-import warnings
-warnings.filterwarnings("ignore")
+# import warnings
+# warnings.filterwarnings("ignore")
+
+# import sys
+# # sys.path.insert(0, '/home/hsroh/Research/sana/src')
+# import pdnl_sana as sana
+# import pdnl_sana.logging
+# import pdnl_sana.slide
+# import pdnl_sana.filter
+# import pdnl_sana.process
+# import pdnl_sana.quantify
 
 import sys
-sys.path.insert(0, '/home/hsroh/Research/sana/src')
+import warnings
+import argparse
+import time
+import math
+import json
+import datetime
+from typing import Optional
+
+import numpy as np
+
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from matplotlib.patches import Ellipse
+from matplotlib.patches import Patch
+from matplotlib.colors import ListedColormap, to_rgba
+
+from skimage.transform import resize
+
+from scipy.stats import norm
+from scipy.ndimage import (
+    gaussian_filter,
+    distance_transform_edt,
+    label,
+    binary_dilation,
+)
+
+from sklearn.preprocessing import StandardScaler
+from sklearn.mixture import GaussianMixture
+
+import maxflow
+from diptest import diptest
+
 import pdnl_sana as sana
 import pdnl_sana.logging
 import pdnl_sana.slide
 import pdnl_sana.filter
 import pdnl_sana.process
 import pdnl_sana.quantify
+
+warnings.filterwarnings("ignore")
+
 
 ################################################################## Helper Functions ##################################################################
 def mask_iqr(x, factor=1.5):
@@ -862,7 +905,8 @@ def render_neuseg_contours(
         if save_path is not None:
             os.makedirs(os.path.dirname(save_path), exist_ok=True)
             fig.savefig(save_path, dpi=dpi, bbox_inches="tight", facecolor="white")
-        plt.show()
+        else:
+            plt.show()
         plt.close(fig)
 
     # ======================================= #
@@ -889,7 +933,7 @@ def render_neuseg_contours(
     return result
 
 ################################################################## Main ##################################################################
-debug = False
+debug = True
 
 def main(argv=None) -> int:
     # %% Argument Parser   

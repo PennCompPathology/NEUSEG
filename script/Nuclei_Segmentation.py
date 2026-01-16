@@ -5,51 +5,88 @@ os.environ["OPENBLAS_NUM_THREADS"] = "1"
 os.environ["OMP_NUM_THREADS"]        = "1"
 os.environ["MKL_NUM_THREADS"]        = "1"
 
+import sys
 import argparse
 import sys
 import tempfile
-from tqdm import tqdm
 import time
 import shutil
-from multiprocessing import Pool, cpu_count
+import warnings
+from multiprocessing import cpu_count
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import numpy as np
 import cv2
-from matplotlib import pyplot as plt
-from sklearn.preprocessing import StandardScaler
-from sklearn.mixture import GaussianMixture
-from sklearn.cluster import DBSCAN
-import warnings
-warnings.filterwarnings("ignore")
+from tqdm import tqdm
 
-# Entropy Tissue Mask
-from scipy.signal import argrelextrema
-from skimage.filters.rank import entropy
-from skimage.morphology import disk
-from copy import deepcopy
-from skimage import measure
-
-from skimage.filters import threshold_multiotsu, threshold_otsu, threshold_triangle
-from scipy.ndimage import gaussian_filter1d
-from scipy.signal import argrelextrema, find_peaks
-from skimage.morphology import remove_small_holes
-
-# HEM
 from skimage.color import rgb2hed
-from skimage.filters import gaussian, threshold_otsu
-import numpy as np
-from skimage import measure
+from skimage.filters import gaussian, threshold_otsu, threshold_multiotsu
 from skimage.morphology import remove_small_holes
+from skimage import measure
 
-import sys
-sys.path.insert(0, '/home/hsroh/Research/sana/src')
+from scipy.ndimage import gaussian_filter1d
+from scipy.signal import argrelextrema
+
 import pdnl_sana as sana
 import pdnl_sana.logging
 import pdnl_sana.slide
 import pdnl_sana.filter
 import pdnl_sana.process
 import pdnl_sana.quantify
+
+import platform
+def log_environment():
+    print("===== NEUSEG Environment =====")
+    print("Python:", sys.version)
+    print("Platform:", platform.platform())
+    print("NumPy version:", np.__version__)
+    print("================================")
+
+# import argparse
+# import sys
+# import tempfile
+# from tqdm import tqdm
+# import time
+# import shutil
+# from multiprocessing import Pool, cpu_count
+# from concurrent.futures import ProcessPoolExecutor, as_completed
+
+# import numpy as np
+# import cv2
+# from matplotlib import pyplot as plt
+# from sklearn.preprocessing import StandardScaler
+# from sklearn.mixture import GaussianMixture
+# from sklearn.cluster import DBSCAN
+# import warnings
+# warnings.filterwarnings("ignore")
+
+# # Entropy Tissue Mask
+# from scipy.signal import argrelextrema
+# from skimage.filters.rank import entropy
+# from skimage.morphology import disk
+# from copy import deepcopy
+# from skimage import measure
+
+# from skimage.filters import threshold_multiotsu, threshold_otsu, threshold_triangle
+# from scipy.ndimage import gaussian_filter1d
+# from scipy.signal import argrelextrema, find_peaks
+# from skimage.morphology import remove_small_holes
+
+# # HEM
+# from skimage.color import rgb2hed
+# from skimage.filters import gaussian, threshold_otsu
+# import numpy as np
+# from skimage import measure
+# from skimage.morphology import remove_small_holes
+
+# import sys
+# # sys.path.insert(0, '/home/hsroh/Research/sana/src')
+# import pdnl_sana as sana
+# import pdnl_sana.logging
+# import pdnl_sana.slide
+# import pdnl_sana.filter
+# import pdnl_sana.process
+# import pdnl_sana.quantify
 
 USE_TEMP = True
 DEBUG = False
@@ -220,7 +257,10 @@ def main(argv=None) -> int:
         np.mean(hem_histograms, axis=0)[:,0], strictness=-0.8)
     global_dab_threshold = sana.threshold.triangular_method(
         np.mean(dab_histograms, axis=0)[:,0], strictness=-0.5)
-            
+    
+    print(f'global_hem_threshold: {global_hem_threshold}')
+    print(f'global_dab_threshold: {global_dab_threshold}')
+    
     # segment the cells
     fn_args = []
     for (i,j) in [(i,j) for i in range(framer.nframes[0]) for j in range(framer.nframes[1])]:
@@ -358,6 +398,7 @@ def main(argv=None) -> int:
 
 
 if __name__ == "__main__":
+    log_environment()
     start_time = time.time()
     rc = main(sys.argv[1:])      # pass only args, not the script name
     elapsed = time.time() - start_time
