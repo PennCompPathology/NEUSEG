@@ -27,6 +27,7 @@ from skimage import measure
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import argrelextrema
 
+# sys.path.insert(0, '/home/hsroh/Research/sana/src')
 import pdnl_sana as sana
 import pdnl_sana.logging
 import pdnl_sana.slide

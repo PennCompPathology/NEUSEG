@@ -18,6 +18,7 @@ GMM_Debug/*
 # Ignore log files everywhere
 # -------------------------------------------------
 *.log
+*.txt
 
 # -------------------------------------------------
 # Ignore svs files everywhere
