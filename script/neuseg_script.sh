@@ -107,3 +107,4 @@ echo "📝 Full log saved to: $LOG_FILE"
 if (( ${#FAIL_PRE[@]} > 0 || ${#FAIL_SEG[@]} > 0 )); then
   exit 2
 fi
+

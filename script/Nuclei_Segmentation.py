@@ -259,7 +259,7 @@ def main(argv=None) -> int:
         np.mean(dab_histograms, axis=0)[:,0], strictness=-0.5)
     
     print(f'global_hem_threshold: {global_hem_threshold}')
-    print(f'global_dab_threshold: {global_dab_threshold}')
+    print(f'global_dab_threshold: {global_dab_threshold}') 
     
     # segment the cells
     fn_args = []
