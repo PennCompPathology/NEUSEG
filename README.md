@@ -126,11 +126,40 @@ NEUSEG/
 ├── Data/
 │   └── *.svs
 ```
-2. **Run NEUSEG**  
-From the root of the repository, execute:
-```bash
-bash script/neuseg_script.sh
-```
+2. **Run NEUSEG**
+From the root of the repository, first set up the Python environment and install all required dependencies.
+
+   2-1. **Create and activate the conda environment**
+   ```
+   conda create -n neuseg python=3.9.21
+   conda activate neuseg
+   ```
+
+   2-2. **Clone the NEUSEG repository and install dependencies**
+   ```
+   git clone https://github.com/PICSL-FTDC-Computational-Pathology/NEUSEG.git
+   cd NEUSEG
+   python -m pip install -r requirements.txt
+   ```
+
+   2-3. **Install the SANA dependency (required)**
+   ```
+   git clone https://github.com/penndigitalneuropathlab/sana.git
+   cd sana
+   git checkout experimental
+   python -m pip install -r src/pdnl_sana/requirements.txt
+   python -m pip install -e .
+   ```
+   Run the following command to confirm that sana was installed correctly:
+   ```
+   python3 -c "import pdnl_sana.image; import pdnl_sana.slide"
+   ```
+   2-4. **Run the NEUSEG pipeline**
+   Return to the NEUSEG root directory and execute:
+   ```
+   cd ..
+   bash ./script/neuseg_script.sh
+   ```
 3. **Outputs**  
    After successful execution, the pipeline generates the following output directory: **GM_WM_Seg_Results/**
    
