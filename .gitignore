@@ -27,6 +27,6 @@ GMM_Debug/*
 *.svs
 
 # -------------------------------------------------
-# Ignore sana git repo everywhere
+# Ignore sana git repo
 # -------------------------------------------------
 sana/
