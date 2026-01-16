@@ -5,16 +5,14 @@ Data/*
 !Data/.gitkeep
 
 # -------------------------------------------------
-# Ignore EVERYTHING inside GM_WM_Seg_Results/, but keep folder
+# Ignore EVERYTHING inside GM_WM_Seg_Results/
 # -------------------------------------------------
 GM_WM_Seg_Results/*
-!GM_WM_Seg_Results/.gitkeep
 
 # -------------------------------------------------
-# Ignore EVERYTHING inside GMM_Debug/, but keep folder
+# Ignore EVERYTHING inside GMM_Debug/
 # -------------------------------------------------
 GMM_Debug/*
-!GMM_Debug/.gitkeep
 
 # -------------------------------------------------
 # Ignore log files everywhere
