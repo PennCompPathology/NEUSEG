@@ -21,9 +21,11 @@ GMM_Debug/*
 *.txt
 
 # -------------------------------------------------
-# Ignore svs files everywhere
+# Ignore svs, tif, tiff files everywhere
 # -------------------------------------------------
 *.svs
+*.tif
+*.tiff
 
 # -------------------------------------------------
 # Ignore sana git repo
