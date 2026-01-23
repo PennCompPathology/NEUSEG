@@ -6,8 +6,11 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 project_root="$(dirname "$script_dir")"
 
 # Input and output directories relative to project root
-WSIS_DIR="$project_root/Data" # .svs files (WSI)
-OUTPUT_ROOT="$project_root/GM_WM_Seg_Results"
+# WSIS_DIR="$project_root/Data" # .svs files (WSI)
+# OUTPUT_ROOT="$project_root/GM_WM_Seg_Results"
+
+WSIS_DIR="$project_root/Data_Zahra_Project" # .svs files (WSI)
+OUTPUT_ROOT="$project_root/GM_WM_Seg_Results_Zahra_Project"
 
 echo "WSIS_DIR: $WSIS_DIR"
 echo "OUTPUT_ROOT: $OUTPUT_ROOT"
@@ -18,16 +21,32 @@ mkdir -p "$OUTPUT_ROOT"
 LOG_FILE="$OUTPUT_ROOT/run_$(date +%Y%m%d_%H%M%S).log"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
-# Collect slides
+# # Collect slides
+# shopt -s nullglob
+# slides=("$WSIS_DIR"/*.svs)
+# shopt -u nullglob
+
+# num_slides=${#slides[@]}
+# if (( num_slides == 0 )); then
+#   echo "No .svs files found in: $WSIS_DIR"
+#   exit 1
+# fi
+
+# Collect slides (.svs, .tif, .tiff)
 shopt -s nullglob
-slides=("$WSIS_DIR"/*.svs)
+slides=(
+  "$WSIS_DIR"/*.svs
+  "$WSIS_DIR"/*.tif
+  "$WSIS_DIR"/*.tiff
+)
 shopt -u nullglob
 
 num_slides=${#slides[@]}
 if (( num_slides == 0 )); then
-  echo "No .svs files found in: $WSIS_DIR"
+  echo "No .svs/.tif/.tiff files found in: $WSIS_DIR"
   exit 1
 fi
+
 
 echo "Found $num_slides slide(s)."
 echo

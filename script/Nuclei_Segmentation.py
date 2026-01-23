@@ -151,7 +151,9 @@ def main(argv=None) -> int:
         os.makedirs(temp_dir, exist_ok=True)
 
     # Copy the WSI
-    slide_f_tmp = os.path.join(temp_dir, slide_name+'.svs')
+    #slide_f_tmp = os.path.join(temp_dir, slide_name+'.svs')
+    ext = os.path.splitext(slide_f)[1]  # keep .tif/.tiff/.svs
+    slide_f_tmp = os.path.join(temp_dir, slide_name + ext)
     shutil.copyfile(slide_f, slide_f_tmp)
 
     # initialize the slide
