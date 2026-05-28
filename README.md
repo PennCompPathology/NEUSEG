@@ -166,6 +166,8 @@ From the root of the repository, first set up the Python environment and install
    This directory contains the final **gray matter (GM) / white matter (WM) segmentation results** produced from the input whole-slide images (WSIs) inside **[`Data/`](Data/)** directory.
 
 ## Citation
+[NEUSEG: Interpretable Unsupervised Gray/White Matter Segmentation for Brain Histopathology WSIs](https://ieeexplore.ieee.org/document/11515902)
+*IEEE ISBI 2026*
 
 If you use NEUSEG in your work, please cite:
 ```text
