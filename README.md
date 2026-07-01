@@ -146,7 +146,6 @@ From the root of the repository, first set up the Python environment and install
    ```
    git clone https://github.com/penndigitalneuropathlab/sana.git
    cd sana
-   git checkout experimental
    python -m pip install -r src/pdnl_sana/requirements.txt
    python -m pip install -e .
    ```
