@@ -131,7 +131,7 @@ From the root of the repository, first set up the Python environment and install
 
    2-1. **Create and activate the conda environment**
    ```
-   conda create -n neuseg python=3.9.21
+   conda create -n neuseg python=3.12 -y
    conda activate neuseg
    ```
 
