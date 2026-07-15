@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "neuseg"
+version = "0.1"
+authors = [
+  { name="Noah Capp", email="noahmcapp@gmail.com" },
+]
+description = "NEUSEG (Histopathology WS GM/WM Segmentation"
+dependencies = [
+	     "numpy",
+	     "scipy",
+	     "matplotlib",
+	     "opencv-python",
+	     "scikit-image",
+	     "scikit-learn",
+	     "tqdm",
+	     "pymaxflow",
+	     "diptest",
+	     "scikit-fmm",
+]
+readme = "README.md"
+requires-python = ">=3.12"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Science/Research",
+    "Development Status :: 4 - Beta",
+    "Topic :: Scientific/Engineering :: Medical Science Apps."
+]
+
+[project.urls]
+Homepage = "https://github.com/PennCompPathology/neuseg"
+
+[project.scripts]
+neuseg = "neuseg:main"
