@@ -35,6 +35,9 @@ def run_cells(logger: pdnl_sana.logging.Logger, input_slide: str, output_directo
     # TODO: copy WSI? probably not necessary...
     loader = pdnl_sana.slide.Loader(logger, input_slide)
 
+    if not os.path.exists(output_directory):
+        os.makedirs(output_directory)
+
     # TODO: save a 8x tb instead of 16x
     tb = loader.load_thumbnail()
     tb.save(os.path.join(output_directory, 'thumbnail.png'))
@@ -46,6 +49,7 @@ def run_cells(logger: pdnl_sana.logging.Logger, input_slide: str, output_directo
         logger.warning("Cannot find tissue in slide!")
         rois, roi_holes = {}, []
     else:
+        tissue_mask.save(os.path.join(output_directory, 'tissue_mask.npy'))
         rois, roi_holes = tissue_mask.to_polygons()
         rois = {'Tissue': rois}
 
@@ -100,7 +104,7 @@ def run_features(logger: pdnl_sana.logging.Logger, output_directory: str, loader
 
     feature_heatmap = np.zeros((h_out, w_out, 3), dtype=float)
     job_args = []
-    for (chunk_y_out, chunk_x_out) in [(y, x) for y in chunk_ys for x in chunk_xs]:
+    for (chunk_y_out, chunk_x_out) in tqdm([(y, x) for y in chunk_ys for x in chunk_xs], desc='Preparing Aggregation'):
 
         # pad the chunk by the window size to center the output heatmap pixels
         x0_out = chunk_x_out - window_size_out[0] / 2
@@ -131,16 +135,20 @@ def run_features(logger: pdnl_sana.logging.Logger, output_directory: str, loader
         feature_heatmap[j0:j1, i0:i1] = out
     np.save(os.path.join(output_directory, 'feature_heatmap.npy'), feature_heatmap)
 
-    # fig, ax = plt.subplots(2,2, sharex=True, sharey=True)
-    # ax = ax.ravel()
-    # ax[0].imshow(tb.img)
-    # ds_cells = 4
-    # ax[0].plot(cells[::ds_cells,0]/loader.level_downsamples[2], cells[::ds_cells,1]/loader.level_downsamples[2], '*', markersize=1, color='red')
-    # for i in range(3):
-    #     im = feature_heatmap[:,:,i]
-    #     mu, sd = np.nanmean(im), np.nanstd(im)
-    #     ax[i+1].imshow(im, cmap='gray', vmin=mu-2*1.96*sd, vmax=mu+2*1.96*sd, extent=(0,w_thumbnail,h_thumbnail,0))
-    # plt.show()
+    fig, ax = plt.subplots(2,2, sharex=True, sharey=True)
+    ax = ax.ravel()
+    ax[0].imshow(tb.img)
+    ds_cells = 4
+    ax[0].plot(cells[::ds_cells,0]/loader.level_downsamples[2], cells[::ds_cells,1]/loader.level_downsamples[2], '*', markersize=1, color='red')
+    ax[0].set_title(f'({ds_cells}x) Subsampled Cell Coordinates')
+    titles = ['Soma Density', 'Avg. Soma Size', 'Avg. Soma Intensity']
+    rng = 5
+    for i in range(3):
+        im = feature_heatmap[:,:,i]
+        mu, sd = np.nanmean(im), np.nanstd(im)
+        ax[i+1].imshow(im, cmap='gray', vmin=mu-rng*1.96*sd, vmax=mu+rng*1.96*sd, extent=(0,w_thumbnail,h_thumbnail,0))
+        ax[i+1].set_title(titles[i])
+    plt.show()
 
     # run_tissue(logger=logger, **kwargs)
 
@@ -153,6 +161,13 @@ def run_tissue(logger: pdnl_sana.logging.Logger, output_directory: str, **kwargs
     run_cortex(logger=logger, **kwargs)
 
 def run_cortex(logger: pdnl_sana.logging.Logger, output_directory: str, **kwargs):
+
+    # load featuers
+    # train GMM
+    
+    # output curves
+
+
     pass
 
 def main():
