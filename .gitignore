@@ -15,10 +15,18 @@ GM_WM_Seg_Results/*
 GMM_Debug/*
 
 # -------------------------------------------------
+# Ignore refactor pipeline test output
+# -------------------------------------------------
+refactor_out/
+
+# -------------------------------------------------
 # Ignore log files everywhere
 # -------------------------------------------------
 *.log
 *.txt
+# ...but requirements files are source, not output
+!requirements.txt
+!**/requirements.txt
 
 # -------------------------------------------------
 # Ignore svs, tif, tiff files everywhere
@@ -33,7 +41,25 @@ GMM_Debug/*
 sana/
 
 # -------------------------------------------------
+# Ignore sibling PDNL package repos checked out here
+# -------------------------------------------------
+pdnl_extract/
+pdnl_process/
+pdnl_aggregate/
+
+# -------------------------------------------------
+# Ignore evaluation result artifacts
+# -------------------------------------------------
+evaluation/eval_results/
+
+# -------------------------------------------------
 # Ignore .DS_Store
 # -------------------------------------------------
 .DS_Store
 **/.DS_Store
+
+# -------------------------------------------------
+# Ignore Python caches
+# -------------------------------------------------
+__pycache__/
+*.pyc
