@@ -33,6 +33,7 @@ import pdnl_sana.logging
 import pdnl_sana.slide
 import pdnl_sana.filter
 import pdnl_sana.process
+import pdnl_sana.segment
 import pdnl_sana.quantify
 
 import platform
@@ -235,7 +236,7 @@ def main(argv=None) -> int:
     level = 0
     frame_size = 2048   # Size of the non-overlapping patch (2048 x 2048)
     size = sana.geo.Point(frame_size, frame_size, is_micron=False, level=level)
-    framer = sana.slide.Framer(loader, size=size, step=size, level=level, rois=tissue_bodies)
+    framer = sana.slide.Framer(loader, size=size, step=size, level=level, rois={'tissue': tissue_bodies})
 
     # TODO: doing this here because of pickling bugs, clean this up
     rois = [x.copy() for x in tissue_bodies]
@@ -272,7 +273,7 @@ def main(argv=None) -> int:
         fn_args.append(args)
 
     with ProcessPoolExecutor(max_workers=n_processes) as executor:
-        futures = {executor.submit(sana.process.segment_wsi_chunk_wrapper, args) for args in fn_args}
+        futures = {executor.submit(sana.segment.segment_wsi_chunk_wrapper, args) for args in fn_args}
         for future in tqdm(as_completed(futures), total=len(futures), desc="Cell Segmentation"):
             _ = future.result()
 

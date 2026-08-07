@@ -131,7 +131,7 @@ From the root of the repository, first set up the Python environment and install
 
    2-1. **Create and activate the conda environment**
    ```
-   conda create -n neuseg python=3.9.21
+   conda create -n neuseg python=3.12 -y
    conda activate neuseg
    ```
 
@@ -146,7 +146,6 @@ From the root of the repository, first set up the Python environment and install
    ```
    git clone https://github.com/penndigitalneuropathlab/sana.git
    cd sana
-   git checkout experimental
    python -m pip install -r src/pdnl_sana/requirements.txt
    python -m pip install -e .
    ```
@@ -166,11 +165,12 @@ From the root of the repository, first set up the Python environment and install
    This directory contains the final **gray matter (GM) / white matter (WM) segmentation results** produced from the input whole-slide images (WSIs) inside **[`Data/`](Data/)** directory.
 
 ## Citation
+[NEUSEG: Interpretable Unsupervised Gray/White Matter Segmentation for Brain Histopathology WSIs](https://ieeexplore.ieee.org/document/11515902)
+*IEEE ISBI 2026*
 
 If you use NEUSEG in your work, please cite:
 ```text
-Roh, H. S., Capp, N., Ohm, D. T., Irwin, D. J., Gee, J. C., & Chen, M.
-NEUSEG: Interpretable Unsupervised GM/WM Segmentation in Brain Histopathology Using Nuclei Morphometrics.
+Roh, Hyung Seok, et al. "NEUSEG: Interpretable Unsupervised GM/WM Segmentation in Brain Histopathology Using Nuclei Morphometrics." 2026 IEEE 23rd International Symposium on Biomedical Imaging (ISBI). IEEE, 2026.
 ```
 
 ---
