@@ -137,10 +137,14 @@ From the root of the repository, first set up the Python environment and install
 
    2-2. **Clone the NEUSEG repository and install dependencies**
    ```
-   git clone https://github.com/PICSL-FTDC-Computational-Pathology/NEUSEG.git
+   git clone https://github.com/PennCompPathology/NEUSEG.git
    cd NEUSEG
    python -m pip install -r requirements.txt
    ```
+   **[`requirements.txt`](requirements.txt)** is a single file covering all three
+   components — the core pipeline, the annotator, and the evaluation notebook.
+   It is grouped into labelled sections so you can see which package belongs to
+   which component, but everything installs in one command.
 
    2-3. **Install the SANA dependency (required)**
    ```
@@ -153,16 +157,30 @@ From the root of the repository, first set up the Python environment and install
    ```
    python3 -c "import pdnl_sana.image; import pdnl_sana.slide"
    ```
-   2-4. **Run the NEUSEG pipeline**
-   Return to the NEUSEG root directory and execute:
+   To confirm it is **this clone** that is active, and not the PyPI build that
+   step 2-2 pulls in as a transitive dependency of `pdnl_extract`:
    ```
-   cd ..
-   bash ./script/neuseg_script.sh
+   python3 -c "import pdnl_sana, os; print(os.path.dirname(pdnl_sana.__file__))"
    ```
-3. **Outputs**  
-   After successful execution, the pipeline generates the following output directory: **GM_WM_Seg_Results/**
+   The printed path should point inside the `sana/` directory you just cloned.
+   An environment only ever holds one `pdnl_sana`, so the editable install
+   above supersedes the PyPI copy — the `pdnl_extract` / `pdnl_process` /
+   `pdnl_aggregate` tools used by the evaluation notebook resolve to this
+   clone as well.
    
-   This directory contains the final **gray matter (GM) / white matter (WM) segmentation results** produced from the input whole-slide images (WSIs) inside **[`Data/`](Data/)** directory.
+   2-4. **Run the NEUSEG pipeline**
+
+   > ⚠️ **Under active development.** The pipeline is currently being refactored
+   > from the standalone scripts in **[`script/`](script/)** into the installable
+   > **[`neuseg/`](neuseg/)** package, and the run instructions are being revised
+   > along with it. This section will be updated once the refactor is complete.
+
+3. **Outputs**
+
+   Once the pipeline is runnable again, results will be written to
+   **GM_WM_Seg_Results/** — the final **gray matter (GM) / white matter (WM)
+   segmentation** produced from the whole-slide images (WSIs) placed in
+   **[`Data/`](Data/)**.
 
 ## Citation
 [NEUSEG: Interpretable Unsupervised Gray/White Matter Segmentation for Brain Histopathology WSIs](https://ieeexplore.ieee.org/document/11515902)

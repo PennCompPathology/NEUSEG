@@ -1,4 +1,0 @@
-pdnl_sana
-PyQt6
-PySide6
-geojson

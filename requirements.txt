@@ -1,4 +1,22 @@
-numpy==2.0.2
+# NEUSEG dependencies.
+#
+#   python -m pip install -r requirements.txt
+#
+# This single file covers the core pipeline, the annotator, and the evaluation
+# notebook. Install it into the conda environment created in README step 2-1.
+#
+# NOTE: pdnl_sana is not listed explicitly, but it still arrives here as a
+# transitive dependency of pdnl_extract. README step 2-3 then installs sana
+# from source (`pip install -e .` from the sana clone), which supersedes the
+# PyPI build. Run the steps in order — 2-2 before 2-3 — so the editable
+# install ends up as the active one.
+
+
+# -------------------------------------------------
+# Core pipeline
+#   script/Nuclei_Segmentation.py, script/GMM_Segmentation.py, neuseg/main.py
+# -------------------------------------------------
+numpy==2.2.6
 scipy==1.13.1
 matplotlib==3.9.4
 opencv-python==4.11.0.86
@@ -8,3 +26,27 @@ tqdm==4.67.1
 PyMaxflow==1.3.2
 diptest==0.10.0
 scikit-fmm
+
+# -------------------------------------------------
+# Annotator
+#   annotator/pdnl_annotator.py
+# -------------------------------------------------
+PySide6==6.11.1
+geojson==3.3.0
+Pillow==12.3.0
+
+# -------------------------------------------------
+# Evaluation
+#   evaluation/eval_manual_auto_ROIs.ipynb and evaluation/Helper_Functions/
+# -------------------------------------------------
+pandas==3.0.5
+openslide-python==1.4.6
+shapely==2.1.2
+statsmodels==0.14.6
+
+# PDNL command-line tools. Helper_Functions/pipeline_ao.py invokes these as
+# subprocesses resolved from the active environment's bin/ directory, so they
+# must be installed in the same env the notebook runs in.
+pdnl_extract==0.7
+pdnl_process==0.5
+pdnl_aggregate==0.4
