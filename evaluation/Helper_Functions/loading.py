@@ -115,14 +115,20 @@ def get_neuseg_results(curr_slide_name, neuseg_dir, svs_path,
     assert (Wm, Hm) == (Wt, Ht), \
         f"mask {Wm}x{Hm} != thumbnail {Wt}x{Ht}; masks assumed at thumbnail resolution"
 
-    wm_polys,     _ = sana.image.Frame(wm_arr).to_polygons()       # GM-WM boundary
-    tissue_polys, _ = sana.image.Frame(tissue_arr).to_polygons()   # GM-CSF boundary
+    # to_polygons() returns (exterior rings, interior rings). The interior rings are
+    # boundaries too -- enclosed CSF spaces in the tissue mask, GM islands inside the
+    # WM mask -- so both are needed, otherwise an annotation tracing an internal
+    # boundary gets measured against the outer perimeter instead.
+    wm_polys,     wm_holes     = sana.image.Frame(wm_arr).to_polygons()       # GM-WM boundary
+    tissue_polys, tissue_holes = sana.image.Frame(tissue_arr).to_polygons()   # GM-CSF boundary
 
-    contour_gm_wm  = [to_fullres(p) for p in wm_polys]                 # Upsample to full-reso
-    contour_gm_csf = [to_fullres(p) for p in tissue_polys]             # Upsample to full-reso
+    contour_gm_wm  = [to_fullres(p) for p in wm_polys + wm_holes]          # Upsample to full-reso
+    contour_gm_csf = [to_fullres(p) for p in tissue_polys + tissue_holes]  # Upsample to full-reso
 
     if verbose:
-        print(f"mask contours -> GM-WM: {len(contour_gm_wm)} polys | GM-CSF: {len(contour_gm_csf)} polys")
+        print(f"mask contours -> "
+              f"GM-WM: {len(contour_gm_wm)} polys ({len(wm_polys)} bodies + {len(wm_holes)} holes) | "
+              f"GM-CSF: {len(contour_gm_csf)} polys ({len(tissue_polys)} bodies + {len(tissue_holes)} holes)")
 
     # [3] saved annotations.geojson -> full-res
     with open(os.path.join(neuseg_dir, file_names["Annotation"])) as f:
