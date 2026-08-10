@@ -53,6 +53,12 @@ pdnl_aggregate/
 evaluation/eval_results/
 
 # -------------------------------------------------
+# Ignore Debugging artifacts
+# -------------------------------------------------
+debug/tissue_extraction_debug/
+debug/SANA.log
+
+# -------------------------------------------------
 # Ignore .DS_Store
 # -------------------------------------------------
 .DS_Store
