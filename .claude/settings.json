@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"/Users/hyroh/Upenn PhD/Published_Code/NEUSEG\" && ls debug && ls -la \"/Volumes/Extreme SSD/bvFTD_Eval_cohort\" 2>/dev/null | head)",
+      "Read(//Volumes/Extreme SSD/bvFTD_Eval_cohort/**)",
+      "Bash(ls -la \"/Volumes/Extreme SSD/bvFTD_Eval_cohort/FTLD-TAU\" | grep -i \"2023-193-27F_L_OFC_AT8_1K_06-12-24_PP\")",
+      "Read(//Volumes/Extreme SSD/bvFTD_Eval_cohort/FTLD-TAU/**)",
+      "Bash(/Users/hyroh/anaconda3/envs/neuseg/bin/python -c ' *)",
+      "Bash(/Users/hyroh/anaconda3/envs/neuseg/bin/python \"/private/tmp/claude-501/-Users-hyroh-Upenn-PhD-Published-Code-NEUSEG/0d30ef73-b898-4e83-a3f2-636cea223bf0/scratchpad/time_slide.py\" \"/Volumes/Extreme SSD/bvFTD_Eval_cohort/FTLD-TAU/2023-193-27F_L_OFC_AT8_1K_06-12-24_PP.svs\")",
+      "Bash(sysctl -n hw.memsize)",
+      "Bash(awk '{print $1/1e9\" GB RAM\"}')",
+      "Bash(vm_stat)",
+      "Bash(sysctl vm.swapusage)",
+      "Bash(/Users/hyroh/anaconda3/envs/neuseg/bin/python -)",
+      "Bash(sort -k6 -nr)",
+      "Bash(awk '{printf \"%7.2f GB  %s %s %s %s\\\\n\", $6/1048576, $11, $12, $13, $14}')",
+      "Bash(/Users/hyroh/anaconda3/envs/neuseg/bin/python \"/private/tmp/claude-501/-Users-hyroh-Upenn-PhD-Published-Code-NEUSEG/0d30ef73-b898-4e83-a3f2-636cea223bf0/scratchpad/lean.py\")",
+      "Bash(/Users/hyroh/anaconda3/envs/neuseg/bin/python \"/private/tmp/claude-501/-Users-hyroh-Upenn-PhD-Published-Code-NEUSEG/0d30ef73-b898-4e83-a3f2-636cea223bf0/scratchpad/inventory.py\")",
+      "Bash(/Users/hyroh/anaconda3/envs/neuseg/bin/python \"/private/tmp/claude-501/-Users-hyroh-Upenn-PhD-Published-Code-NEUSEG/0d30ef73-b898-4e83-a3f2-636cea223bf0/scratchpad/reset_test.py\")",
+      "Bash(awk 'NR==1{print} /Pages free|Pages active|Pages inactive|Pages wired|Pages occupied by compressor|Swapins|Swapouts/{print}')",
+      "Bash(awk '{printf \"%7.2f GB  %5s%%CPU  pid=%s  %s\\\\n\", $6/1048576, $3, $2, substr\\($0, index\\($0,$11\\), 90\\)}')",
+      "Read(//Volumes/Extreme SSD/bvFTD_Eval_cohort/debug/tissue_extraction_debug/**)",
+      "Bash(awk '{print 528-$1\" left\"}')",
+      "Bash(/Users/hyroh/anaconda3/envs/neuseg/bin/python \"/private/tmp/claude-501/-Users-hyroh-Upenn-PhD-Published-Code-NEUSEG/0d30ef73-b898-4e83-a3f2-636cea223bf0/scratchpad/equiv.py\")",
+      "Bash(grep -v \"^$\")",
+      "Bash(grep -v \"^[0-9]*\\\\s*$\")",
+      "Read(//Volumes/Extreme SSD/bvFTD_Eval_cohort/debug/tissue_extraction_debug/bvFTD_Eval_cohort/FTLD-TAU/**)",
+      "Bash(/Users/hyroh/anaconda3/envs/neuseg/bin/python \"/private/tmp/claude-501/-Users-hyroh-Upenn-PhD-Published-Code-NEUSEG/0d30ef73-b898-4e83-a3f2-636cea223bf0/scratchpad/crop.py\")",
+      "Bash(awk '{printf \"%6.2f GB  %s\\\\n\", $6/1048576, substr\\($0, index\\($0,$11\\), 75\\)}')",
+      "Bash(awk '{n=$11; if \\(n ~ /Chrome/\\) c+=$6; else if \\(n ~ /Visual Studio Code|Code Helper/\\) v+=$6; else if \\(n ~ /Spotify/\\) s+=$6} END {printf \"Chrome  %5.2f GB\\\\nVS Code %5.2f GB\\\\nSpotify %5.2f GB\\\\n\", c/1048576, v/1048576, s/1048576}')",
+      "Bash(/Users/hyroh/anaconda3/envs/neuseg/bin/python \"/private/tmp/claude-501/-Users-hyroh-Upenn-PhD-Published-Code-NEUSEG/0d30ef73-b898-4e83-a3f2-636cea223bf0/scratchpad/slide2.py\")",
+      "Bash(cp debug/tissue_extraction.ipynb \"/private/tmp/claude-501/-Users-hyroh-Upenn-PhD-Published-Code-NEUSEG/0d30ef73-b898-4e83-a3f2-636cea223bf0/scratchpad/nb.before_contour.bak\")",
+      "Bash(/Users/hyroh/anaconda3/envs/neuseg/bin/python \"/private/tmp/claude-501/-Users-hyroh-Upenn-PhD-Published-Code-NEUSEG/0d30ef73-b898-4e83-a3f2-636cea223bf0/scratchpad/patch_contour.py\")",
+      "Bash(/Users/hyroh/anaconda3/envs/neuseg/bin/python \"/private/tmp/claude-501/-Users-hyroh-Upenn-PhD-Published-Code-NEUSEG/0d30ef73-b898-4e83-a3f2-636cea223bf0/scratchpad/verify_kb.py\")",
+      "Bash(/Users/hyroh/anaconda3/envs/neuseg/bin/python \"/private/tmp/claude-501/-Users-hyroh-Upenn-PhD-Published-Code-NEUSEG/0d30ef73-b898-4e83-a3f2-636cea223bf0/scratchpad/hist_helper.py\")"
+    ]
+  }
+}
