@@ -32,7 +32,15 @@
       "Bash(cp debug/tissue_extraction.ipynb \"/private/tmp/claude-501/-Users-hyroh-Upenn-PhD-Published-Code-NEUSEG/0d30ef73-b898-4e83-a3f2-636cea223bf0/scratchpad/nb.before_contour.bak\")",
       "Bash(/Users/hyroh/anaconda3/envs/neuseg/bin/python \"/private/tmp/claude-501/-Users-hyroh-Upenn-PhD-Published-Code-NEUSEG/0d30ef73-b898-4e83-a3f2-636cea223bf0/scratchpad/patch_contour.py\")",
       "Bash(/Users/hyroh/anaconda3/envs/neuseg/bin/python \"/private/tmp/claude-501/-Users-hyroh-Upenn-PhD-Published-Code-NEUSEG/0d30ef73-b898-4e83-a3f2-636cea223bf0/scratchpad/verify_kb.py\")",
-      "Bash(/Users/hyroh/anaconda3/envs/neuseg/bin/python \"/private/tmp/claude-501/-Users-hyroh-Upenn-PhD-Published-Code-NEUSEG/0d30ef73-b898-4e83-a3f2-636cea223bf0/scratchpad/hist_helper.py\")"
+      "Bash(/Users/hyroh/anaconda3/envs/neuseg/bin/python \"/private/tmp/claude-501/-Users-hyroh-Upenn-PhD-Published-Code-NEUSEG/0d30ef73-b898-4e83-a3f2-636cea223bf0/scratchpad/hist_helper.py\")",
+      "Bash(git check-ignore *)",
+      "Bash(echo \"\\(exit $?\\)\")",
+      "Bash(git ls-tree *)",
+      "Bash(echo \"\\(grep exit $?\\)\")",
+      "Bash(python3 -c ' *)",
+      "Bash(python3 -)",
+      "Read(//Volumes/Extreme SSD/bvFTD_Eval_cohort/FTLD-TDP/**)",
+      "Bash(python3 -c \"import pdnl_sana, scipy, skimage; print\\('imports OK'\\)\")"
     ]
   }
 }
