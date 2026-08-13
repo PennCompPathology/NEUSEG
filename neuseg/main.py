@@ -26,7 +26,7 @@ from matplotlib import pyplot as plt
 from skimage.transform import resize
 
 from tissue_extraction import get_tissue_mask
-from GM_WM_Segmentation import run_gmm, post_process, render_contours
+from gmwm_segmentation import run_gmm, post_process, render_contours
 
 import pdnl_sana.logging
 import pdnl_sana.slide
