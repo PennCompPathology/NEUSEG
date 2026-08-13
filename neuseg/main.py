@@ -220,6 +220,11 @@ def run_cortex(logger: pdnl_sana.logging.Logger, output_directory: str, input_sl
     # Supersedes the rudimentary pdnl_sana.slide.find_tissue mask run_cells saved.
     tissue_mask, stages = get_tissue_mask(tb)
     logger.debug(f"tissue_mask: {tissue_mask.img.shape}")
+
+    # Override the tissue_mask.npy from run_cells
+    tissue_mask_f = os.path.join(output_directory, 'tissue_mask.npy')
+    tissue_mask.save(tissue_mask_f)
+    logger.debug(f"tissue_mask (overriding run_cells) saved to: {tissue_mask_f}")
     
     # --- (3) GMM: GM/WM posteriors from the soma feature heatmaps ---
     # input_slide is only for the debug figure, which reads cells.npy itself.
