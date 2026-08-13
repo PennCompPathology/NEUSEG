@@ -2,6 +2,7 @@
 
 import os
 import sys
+import json
 import argparse
 from collections.abc import Callable
 
@@ -12,6 +13,11 @@ from tqdm import tqdm
 import numpy as np
 from matplotlib import pyplot as plt
 
+from skimage.transform import resize
+
+from tissue_extraction import get_tissue_mask
+from GM_WM_Segmentation import run_gmm, post_process, render_contours
+
 import pdnl_sana.logging
 import pdnl_sana.slide
 import pdnl_sana.geo
@@ -19,6 +25,9 @@ import pdnl_sana.process
 import pdnl_sana.threshold
 import pdnl_sana.segment
 import pdnl_sana.quantify
+
+# --debug_level values that ask for the diagnostic figures
+DEBUG_LEVELS = ('debug', 'full')
 
 def dispatch_jobs(job: Callable, job_args: list[dict], n_cores: int=1, progress_str: str=""):
     if n_cores == 1:
@@ -72,9 +81,12 @@ def run_cells(logger: pdnl_sana.logging.Logger, input_slide: str, output_directo
     
     # save our work and continue to the next step
     np.save(os.path.join(output_directory, 'cells.npy'), cells)
-    run_features(logger=logger, output_directory=output_directory, loader=loader, n_cores=n_cores, **kwargs)
+    
+    # input_slide is a named parameter here, so it is not in kwargs: pass it on explicitly or the later steps in the chain never see it.
+    run_features(logger=logger, output_directory=output_directory, loader=loader,
+                 n_cores=n_cores, input_slide=input_slide, **kwargs)
 
-def run_features(logger: pdnl_sana.logging.Logger, output_directory: str, loader: pdnl_sana.slide.Loader, ds_thumbnail: float=1, window_size: float=1000, n_cores: int=1, **kwargs):
+def run_features(logger: pdnl_sana.logging.Logger, output_directory: str, loader: pdnl_sana.slide.Loader, ds_thumbnail: float=1, window_size: float=1000, n_cores: int=1, debug_level: str='normal', **kwargs):
     cells_f = os.path.join(output_directory, 'cells.npy')
     tb_f = os.path.join(output_directory, 'thumbnail.png')
     if not os.path.exists(cells_f) or not os.path.exists(tb_f):
@@ -97,10 +109,11 @@ def run_features(logger: pdnl_sana.logging.Logger, output_directory: str, loader
     chunk_size_out = loader.converter.to_pixels(chunk_size, level=loader.thumbnail_level) / ds_thumbnail
     chunk_xs = np.arange(0, w_out + chunk_size_out[0], chunk_size_out[0])
     chunk_ys = np.arange(0, h_out + chunk_size_out[1], chunk_size_out[1])
-
+    
+    # NOTE: Bug fixed (aded .copy())
     window_size = pdnl_sana.geo.Point(window_size, window_size, is_micron=True)
-    window_size_slide = loader.converter.to_pixels(window_size, level=0)
-    window_size_out = loader.converter.to_pixels(window_size, level=loader.thumbnail_level) / ds_thumbnail
+    window_size_slide = loader.converter.to_pixels(window_size.copy(), level=0)
+    window_size_out = loader.converter.to_pixels(window_size.copy(), level=loader.thumbnail_level) / ds_thumbnail
 
     feature_heatmap = np.zeros((h_out, w_out, 3), dtype=float)
     job_args = []
@@ -135,40 +148,113 @@ def run_features(logger: pdnl_sana.logging.Logger, output_directory: str, loader
         feature_heatmap[j0:j1, i0:i1] = out
     np.save(os.path.join(output_directory, 'feature_heatmap.npy'), feature_heatmap)
 
-    fig, ax = plt.subplots(2,2, sharex=True, sharey=True)
-    ax = ax.ravel()
-    ax[0].imshow(tb.img)
-    ds_cells = 4
-    ax[0].plot(cells[::ds_cells,0]/loader.level_downsamples[2], cells[::ds_cells,1]/loader.level_downsamples[2], '*', markersize=1, color='red')
-    ax[0].set_title(f'({ds_cells}x) Subsampled Cell Coordinates')
-    titles = ['Soma Density', 'Avg. Soma Size', 'Avg. Soma Intensity']
-    rng = 5
-    for i in range(3):
-        im = feature_heatmap[:,:,i]
-        mu, sd = np.nanmean(im), np.nanstd(im)
-        ax[i+1].imshow(im, cmap='gray', vmin=mu-rng*1.96*sd, vmax=mu+rng*1.96*sd, extent=(0,w_thumbnail,h_thumbnail,0))
-        ax[i+1].set_title(titles[i])
-    plt.show()
+    if debug_level in DEBUG_LEVELS:
+        fig, ax = plt.subplots(2,2, sharex=True, sharey=True)
+        ax = ax.ravel()
+        ax[0].imshow(tb.img)
+        ds_cells = 4
+        ax[0].plot(cells[::ds_cells,0]/loader.level_downsamples[2], cells[::ds_cells,1]/loader.level_downsamples[2], '*', markersize=1, color='red')
+        ax[0].set_title(f'({ds_cells}x) Subsampled Cell Coordinates')
+        titles = ['Soma Density', 'Avg. Soma Size', 'Avg. Soma Intensity']
+        rng = 5
+        for i in range(3):
+            im = feature_heatmap[:,:,i]
+            mu, sd = np.nanmean(im), np.nanstd(im)
+            ax[i+1].imshow(im, cmap='gray', vmin=mu-rng*1.96*sd, vmax=mu+rng*1.96*sd, extent=(0,w_thumbnail,h_thumbnail,0))
+            ax[i+1].set_title(titles[i])
 
-    # run_tissue(logger=logger, **kwargs)
+        # record the aggregation window: localize_coordinates smooths with a gaussian
+        # of sigma = window/5, so this is what sets how smooth the heatmaps look
+        w_um = float(np.asarray(window_size)[0])
+        w_l0 = float(np.asarray(window_size_slide)[0])
+        w_tb = float(np.asarray(window_size_out)[0])
+        fig.suptitle(f'window_size = {w_um:g} um = {w_l0:.1f} level-0 px = {w_tb:.1f} thumbnail px\n'
+                     f'gaussian sigma = window/5 = {w_l0/5:.1f} level-0 px = {w_tb/5:.2f} thumbnail px\n'
+                     f'ds_thumbnail = {ds_thumbnail:g}', fontsize=8)
+        fig.tight_layout(rect=(0, 0, 1, 0.92))   # leave room for the 3-line suptitle
+        features_png = os.path.join(output_directory, 'run_features_output.png')
+        fig.savefig(features_png, dpi=150)
+        plt.close(fig)
+        logger.debug(f'feature figure saved to: {features_png}')
+
+    # ds_thumbnail and debug_level are named parameters here, so they have to be
+    # passed on: run_cortex needs both.
+    run_tissue(logger=logger, output_directory=output_directory,
+               ds_thumbnail=ds_thumbnail, debug_level=debug_level, **kwargs)
 
 def run_tissue(logger: pdnl_sana.logging.Logger, output_directory: str, **kwargs):
-    features_f = os.path.join(output_directory, 'features.npy')
+    features_f = os.path.join(output_directory, 'feature_heatmap.npy')
     if not os.path.exists(features_f):
         logger.error("FEATURE ARRAY DOES NOT EXIST, must re-run with: neuseg ... --entrypoint features")
         return
     
-    run_cortex(logger=logger, **kwargs)
+    run_cortex(logger=logger, output_directory=output_directory, **kwargs)
 
-def run_cortex(logger: pdnl_sana.logging.Logger, output_directory: str, **kwargs):
+def run_cortex(logger: pdnl_sana.logging.Logger, output_directory: str, input_slide: str,
+               ds_thumbnail: float=1, debug_level: str='normal', **kwargs):
+    debug = debug_level in DEBUG_LEVELS
 
-    # load featuers
-    # train GMM
+    # --- (1) Load the feature heatmap and thumbnail written by the earlier steps ---
+    features_f = os.path.join(output_directory, 'feature_heatmap.npy')
+    tb_f = os.path.join(output_directory, 'thumbnail.png')
+    missing = [os.path.basename(f) for f in (features_f, tb_f) if not os.path.exists(f)]
+    if missing:
+        logger.error(f"MISSING {', '.join(missing)}, must re-run with: neuseg ... --entrypoint cells")
+        return
+
+    features = np.load(features_f)
+    tb = pdnl_sana.image.Frame(tb_f)
+    logger.debug(f"Thumbnail: {tb.img.shape} / Feature heatmap: {features.shape}")
+
+    # --- (2) Tissue mask, thresholded just above the background peak ---
+    # Supersedes the rudimentary pdnl_sana.slide.find_tissue mask run_cells saved.
+    tissue_mask, stages = get_tissue_mask(tb)
+    logger.debug(f"tissue_mask: {tissue_mask.img.shape}")
     
-    # output curves
+    # --- (3) GMM: GM/WM posteriors from the soma feature heatmaps ---
+    # input_slide is only for the debug figure, which reads cells.npy itself.
+    gm_prob, tissue_mask_features = run_gmm(
+        tb, tissue_mask, features, logger=logger, input_slide=input_slide,
+        debug=debug, output_directory=output_directory)
 
+    # --- (4) Post-processing: CRF, then island pruning ---
+    # The heatmap is the thumbnail divided by --ds_thumbnail, so its microns per
+    # pixel is the slide's scaled by both downsamples.  post_process needs it to
+    # turn the island floor from mm2 into pixels.
+    loader = pdnl_sana.slide.Loader(logger, input_slide)
+    try:
+        mpp_features = float(loader.mpp) * loader.converter.ds[loader.thumbnail_level] * ds_thumbnail
+    finally:
+        loader.close()
 
-    pass
+    gm_mask, wm_mask = post_process(gm_prob, tissue_mask_features, mpp=mpp_features,
+                                    logger=logger, debug=debug,
+                                    output_directory=output_directory)
+
+    # --- (5) Put the masks on the thumbnail grid ---
+    # A no-op at --ds_thumbnail 1, where the heatmap already is the thumbnail.
+    # Last, not before (4): resampling moves the GM/WM boundary around, and the
+    # CRF has already settled where that boundary belongs.  Nearest-neighbour,
+    # since these are labels.
+    tissue_thumb = tissue_mask.img.squeeze().astype(bool)
+    if gm_mask.shape != tissue_thumb.shape:
+        gm_mask = resize(gm_mask, tissue_thumb.shape, order=0,
+                         preserve_range=True, anti_aliasing=False).astype(bool)
+        gm_mask &= tissue_thumb
+        wm_mask = tissue_thumb & ~gm_mask
+
+    # --- (6) Trace the GM/WM boundaries as polygons ---
+    slide_name = os.path.splitext(os.path.basename(input_slide))[0]
+    contours = render_contours(tb, gm_mask, wm_mask, tissue_thumb, title=slide_name,
+                               debug=debug, output_directory=output_directory)
+
+    # --- (7) Save ---
+    np.save(os.path.join(output_directory, 'gm_mask.npy'), gm_mask)
+    np.save(os.path.join(output_directory, 'wm_mask.npy'), wm_mask)
+    with open(os.path.join(output_directory, 'gmwm_contours.json'), 'w') as f:
+        json.dump(contours, f)
+    logger.debug(f"GM/WM masks and contours saved to: {output_directory}")
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -218,10 +304,10 @@ def main():
     elif args.entrypoint == 'features':
         loader = pdnl_sana.slide.Loader(logger, args.input_slide)
         run_features(logger=logger, loader=loader, **vars(args))
-    # elif args.mode == 'tissue':
-    #     run_tissue(logger=logger, **args)    
-    # elif args.mode == 'cortex':
-    #     run_cortex(logger=logger, **args)
+    elif args.entrypoint == 'tissue':
+        run_tissue(logger=logger, **vars(args))
+    elif args.entrypoint == 'cortex':
+        run_cortex(logger=logger, **vars(args))
 
 if __name__ == "__main__":
     main()
