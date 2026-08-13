@@ -1,6 +1,16 @@
 #!/usr/bin/env python3
 
 import os
+
+# Single-thread BLAS, before numpy is imported: these are read once at load
+# time.  Otherwise every worker process spawns a thread per core on top of
+# --n_cores, which oversubscribes a big node and, on a >128 core machine,
+# segfaults the GMM fit outright.  --n_cores stays the only knob.  Nothing here
+# is a big enough matmul to want threaded BLAS anyway.
+for _var in ('OPENBLAS_NUM_THREADS', 'OMP_NUM_THREADS', 'MKL_NUM_THREADS',
+             'NUMEXPR_NUM_THREADS', 'VECLIB_MAXIMUM_THREADS'):
+    os.environ.setdefault(_var, '1')
+
 import sys
 import json
 import argparse
