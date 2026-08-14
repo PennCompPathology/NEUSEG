@@ -39,6 +39,29 @@ import pdnl_sana.quantify
 # --debug_level values that ask for the diagnostic figures
 DEBUG_LEVELS = ('debug', 'full')
 
+# all array outputs go into this one compressed archive instead of a .npy each
+def outputs_path(output_directory: str, input_slide: str) -> str:
+    """
+    Path of the outputs archive, named after the slide file minus its extension.
+    """
+    slide_name = os.path.splitext(os.path.basename(input_slide))[0]
+    return os.path.join(output_directory, slide_name+'_neuseg.npz')
+
+def save_arrays(output_directory: str, input_slide: str, **arrays):
+    """
+    Adds arrays to the outputs archive, keeping the ones already in it. A zip
+    cannot be appended to in place, so the existing members are rewritten with
+    the new ones, via a temporary file so a partial write can't destroy them.
+    """
+    fpath = outputs_path(output_directory, input_slide)
+    saved = {}
+    if os.path.exists(fpath):
+        with np.load(fpath) as z:
+            saved = dict(z)
+    saved.update(arrays)
+    np.savez_compressed(fpath+'.tmp.npz', **saved)
+    os.replace(fpath+'.tmp.npz', fpath)
+
 def dispatch_jobs(job: Callable, job_args: list[dict], n_cores: int=1, progress_str: str=""):
     if n_cores == 1:
         for args in tqdm(job_args, desc=progress_str):
@@ -59,16 +82,15 @@ def run_cells(logger: pdnl_sana.logging.Logger, input_slide: str, output_directo
 
     # TODO: save a 8x tb instead of 16x
     tb = loader.load_thumbnail()
-    tb.save(os.path.join(output_directory, 'thumbnail.png'))
+    save_arrays(output_directory, input_slide, thumbnail=tb.img)
 
-    # create a rudimentary tissue mask
-    # TODO: maybe just turn this off? doesn't save a ton of time and adds failure risk
-    tissue_mask = pdnl_sana.slide.find_tissue(tb)
+    # Compute the tissue_mask
+    tissue_mask, _ = get_tissue_mask(tb)
     if tissue_mask is None:
         logger.warning("Cannot find tissue in slide!")
         rois, roi_holes = {}, []
     else:
-        tissue_mask.save(os.path.join(output_directory, 'tissue_mask.npy'))
+        save_arrays(output_directory, input_slide, tissue_mask=tissue_mask.img)
         rois, roi_holes = tissue_mask.to_polygons()
         rois = {'Tissue': rois}
 
@@ -90,20 +112,21 @@ def run_cells(logger: pdnl_sana.logging.Logger, input_slide: str, output_directo
     cells = np.concatenate([cells for cells in dispatch_jobs(pdnl_sana.segment.segment_chunk, job_args, n_cores=n_cores, progress_str="Segmenting Cells")], axis=0)
     
     # save our work and continue to the next step
-    np.save(os.path.join(output_directory, 'cells.npy'), cells)
+    save_arrays(output_directory, input_slide, cells=cells)
     
     # input_slide is a named parameter here, so it is not in kwargs: pass it on explicitly or the later steps in the chain never see it.
     run_features(logger=logger, output_directory=output_directory, loader=loader,
                  n_cores=n_cores, input_slide=input_slide, **kwargs)
 
-def run_features(logger: pdnl_sana.logging.Logger, output_directory: str, loader: pdnl_sana.slide.Loader, ds_thumbnail: float=1, window_size: float=1000, n_cores: int=1, debug_level: str='normal', **kwargs):
-    cells_f = os.path.join(output_directory, 'cells.npy')
-    tb_f = os.path.join(output_directory, 'thumbnail.png')
-    if not os.path.exists(cells_f) or not os.path.exists(tb_f):
+def run_features(logger: pdnl_sana.logging.Logger, output_directory: str, input_slide: str, loader: pdnl_sana.slide.Loader, debug_directory: str, ds_thumbnail: float=1, window_size: float=1000, n_cores: int=1, debug_level: str='normal', **kwargs):
+    outputs_f = outputs_path(output_directory, input_slide)
+    z = np.load(outputs_f) if os.path.exists(outputs_f) else {}
+    if 'cells' not in z or 'thumbnail' not in z:
         logger.error("CELL ARRAY DOES NOT EXIST, must re-run with: neuseg ... --entrypoint cells")
         return
-    cells = np.load(cells_f)
-    tb = pdnl_sana.image.Frame(tb_f)
+    cells = z['cells']
+    tb = pdnl_sana.image.Frame(z['thumbnail'])
+    z.close()
 
     # define the size of the coordinate systems
     w_out, h_out = loader.converter.to_int(tb.size() / ds_thumbnail)
@@ -156,9 +179,13 @@ def run_features(logger: pdnl_sana.logging.Logger, output_directory: str, loader
     # generate the feature heatmap and write to disk
     for (out, i0, j0, i1, j1) in dispatch_jobs(pdnl_sana.quantify.aggregate_cells, job_args, n_cores=n_cores, progress_str='Aggregating Cells'):
         feature_heatmap[j0:j1, i0:i1] = out
-    np.save(os.path.join(output_directory, 'feature_heatmap.npy'), feature_heatmap)
+
+    # Don't save the Soma Intensity feature & Cast to float32
+    save_arrays(output_directory, input_slide,
+                feature_heatmap=feature_heatmap[:, :, :2].astype(np.float32))
 
     if debug_level in DEBUG_LEVELS:
+        os.makedirs(debug_directory, exist_ok=True)
         fig, ax = plt.subplots(2,2, sharex=True, sharey=True)
         ax = ax.ravel()
         ax[0].imshow(tb.img)
@@ -182,55 +209,59 @@ def run_features(logger: pdnl_sana.logging.Logger, output_directory: str, loader
                      f'gaussian sigma = window/5 = {w_l0/5:.1f} level-0 px = {w_tb/5:.2f} thumbnail px\n'
                      f'ds_thumbnail = {ds_thumbnail:g}', fontsize=8)
         fig.tight_layout(rect=(0, 0, 1, 0.92))   # leave room for the 3-line suptitle
-        features_png = os.path.join(output_directory, 'run_features_output.png')
+        features_png = os.path.join(debug_directory, 'run_features_output.png')
         fig.savefig(features_png, dpi=150)
         plt.close(fig)
         logger.debug(f'feature figure saved to: {features_png}')
 
-    # ds_thumbnail and debug_level are named parameters here, so they have to be
-    # passed on: run_cortex needs both.
-    run_tissue(logger=logger, output_directory=output_directory,
-               ds_thumbnail=ds_thumbnail, debug_level=debug_level, **kwargs)
+    # input_slide, ds_thumbnail, debug_level and debug_directory are named
+    # parameters here, so they have to be passed on: run_cortex needs all four.
+    run_tissue(logger=logger, output_directory=output_directory, input_slide=input_slide,
+               ds_thumbnail=ds_thumbnail, debug_level=debug_level,
+               debug_directory=debug_directory, **kwargs)
 
-def run_tissue(logger: pdnl_sana.logging.Logger, output_directory: str, **kwargs):
-    features_f = os.path.join(output_directory, 'feature_heatmap.npy')
-    if not os.path.exists(features_f):
+def run_tissue(logger: pdnl_sana.logging.Logger, output_directory: str, input_slide: str, **kwargs):
+    outputs_f = outputs_path(output_directory, input_slide)
+    z = np.load(outputs_f) if os.path.exists(outputs_f) else {}
+    if 'feature_heatmap' not in z:
         logger.error("FEATURE ARRAY DOES NOT EXIST, must re-run with: neuseg ... --entrypoint features")
         return
-    
-    run_cortex(logger=logger, output_directory=output_directory, **kwargs)
+    z.close()
+
+    run_cortex(logger=logger, output_directory=output_directory, input_slide=input_slide, **kwargs)
 
 def run_cortex(logger: pdnl_sana.logging.Logger, output_directory: str, input_slide: str,
-               ds_thumbnail: float=1, debug_level: str='normal', **kwargs):
+               debug_directory: str, ds_thumbnail: float=1, debug_level: str='normal', **kwargs):
     debug = debug_level in DEBUG_LEVELS
+    if debug:
+        os.makedirs(debug_directory, exist_ok=True)
 
-    # --- (1) Load the feature heatmap and thumbnail written by the earlier steps ---
-    features_f = os.path.join(output_directory, 'feature_heatmap.npy')
-    tb_f = os.path.join(output_directory, 'thumbnail.png')
-    missing = [os.path.basename(f) for f in (features_f, tb_f) if not os.path.exists(f)]
+    # --- (1) Load the feature heatmap, thumbnail and tissue mask written by the earlier steps ---
+    outputs_f = outputs_path(output_directory, input_slide)
+    z = np.load(outputs_f) if os.path.exists(outputs_f) else {}
+    missing = [name for name in ('feature_heatmap', 'thumbnail', 'tissue_mask') if name not in z]
     if missing:
         logger.error(f"MISSING {', '.join(missing)}, must re-run with: neuseg ... --entrypoint cells")
         return
 
-    features = np.load(features_f)
-    tb = pdnl_sana.image.Frame(tb_f)
+    features = z['feature_heatmap']
+    tb = pdnl_sana.image.Frame(z['thumbnail'])
     logger.debug(f"Thumbnail: {tb.img.shape} / Feature heatmap: {features.shape}")
 
     # --- (2) Tissue mask, thresholded just above the background peak ---
-    # Supersedes the rudimentary pdnl_sana.slide.find_tissue mask run_cells saved.
-    tissue_mask, stages = get_tissue_mask(tb)
+    # get_tissue_mask already ran on this same thumbnail in run_cells, so load its
+    # output instead of repeating the work.
+    tissue_mask = pdnl_sana.image.Frame(z['tissue_mask'])
     logger.debug(f"tissue_mask: {tissue_mask.img.shape}")
+    # the cells are only needed for the debug figure's overlay panel
+    cells = z['cells'] if debug and 'cells' in z else None
+    z.close()
 
-    # Override the tissue_mask.npy from run_cells
-    tissue_mask_f = os.path.join(output_directory, 'tissue_mask.npy')
-    tissue_mask.save(tissue_mask_f)
-    logger.debug(f"tissue_mask (overriding run_cells) saved to: {tissue_mask_f}")
-    
     # --- (3) GMM: GM/WM posteriors from the soma feature heatmaps ---
-    # input_slide is only for the debug figure, which reads cells.npy itself.
+    # input_slide and cells are only for the debug figure.
     gm_prob, tissue_mask_features = run_gmm(
         tb, tissue_mask, features, logger=logger, input_slide=input_slide,
-        debug=debug, output_directory=output_directory)
+        cells=cells, debug=debug, output_directory=debug_directory)
 
     # --- (4) Post-processing: CRF, then island pruning ---
     # The heatmap is the thumbnail divided by --ds_thumbnail, so its microns per
@@ -244,7 +275,7 @@ def run_cortex(logger: pdnl_sana.logging.Logger, output_directory: str, input_sl
 
     gm_mask, wm_mask = post_process(gm_prob, tissue_mask_features, mpp=mpp_features,
                                     logger=logger, debug=debug,
-                                    output_directory=output_directory)
+                                    output_directory=debug_directory)
 
     # --- (5) Put the masks on the thumbnail grid ---
     # A no-op at --ds_thumbnail 1, where the heatmap already is the thumbnail.
@@ -261,13 +292,13 @@ def run_cortex(logger: pdnl_sana.logging.Logger, output_directory: str, input_sl
     # --- (6) Trace the GM/WM boundaries as polygons ---
     slide_name = os.path.splitext(os.path.basename(input_slide))[0]
     contours = render_contours(tb, gm_mask, wm_mask, tissue_thumb, title=slide_name,
-                               debug=debug, output_directory=output_directory)
+                               debug=debug, output_directory=debug_directory)
 
     # --- (7) Save ---
-    np.save(os.path.join(output_directory, 'gm_mask.npy'), gm_mask)
-    np.save(os.path.join(output_directory, 'wm_mask.npy'), wm_mask)
-    with open(os.path.join(output_directory, 'gmwm_contours.json'), 'w') as f:
-        json.dump(contours, f)
+    # the contours go in as the json string itself, read back with
+    # json.loads(str(z['gmwm_contours']))
+    save_arrays(output_directory, input_slide, gm_mask=gm_mask, wm_mask=wm_mask,
+                gmwm_contours=np.array(json.dumps(contours)))
     logger.debug(f"GM/WM masks and contours saved to: {output_directory}")
 
 
@@ -282,7 +313,10 @@ def main():
     parser.add_argument('--n_cores',                         
                         help="multiprocessing cpu cores to use", 
                         type=int, default=1)
-    parser.add_argument('--tmp_directory', 
+    parser.add_argument('--debug_directory',
+                        help="directory path to save debug figures to (default: --output_directory)",
+                        default=None)
+    parser.add_argument('--tmp_directory',
                         help="use a specific location for temporary files which will not be auto-deleted",
                         default=None)
     parser.add_argument('--frame_size',
@@ -304,7 +338,12 @@ def main():
                         default='normal')
     args = parser.parse_args()
 
-    logger_fpath = os.path.join(args.output_directory, 'log.pkl')
+    if args.debug_directory is None:
+        args.debug_directory = args.output_directory
+
+    # named after the slide: several slides can share one --output_directory now
+    slide_name = os.path.splitext(os.path.basename(args.input_slide))[0]
+    logger_fpath = os.path.join(args.output_directory, slide_name+'_log.pkl')
     logger = pdnl_sana.logging.Logger(args.debug_level, logger_fpath, name="NEUSEG")
 
     logger.debug(f'Using {args.n_cores} CPU cores out of {int(cpu_count()*2/3)} available')

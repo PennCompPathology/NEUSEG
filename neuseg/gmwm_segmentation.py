@@ -79,7 +79,7 @@ DROPPED_C = '#00e5ff'   # cyan, for pixels drop_outliers removed
 
 def viz_gmm_result(tb, tissue_mask_features, soma_density, soma_size, inliers,
                    X_scaled_tissue, labels, gmm, gm_label,
-                   logger=None, input_slide=None, n_scatter=20000, output_directory=None):
+                   logger=None, input_slide=None, cells=None, n_scatter=20000, output_directory=None):
     """Eight-panel diagnostic of the GM/WM fit, from raw cells through to the labels.
 
     tb                   : sana Frame thumbnail, RGB uint8
@@ -91,21 +91,19 @@ def viz_gmm_result(tb, tissue_mask_features, soma_density, soma_size, inliers,
     gmm                  : the fitted GaussianMixture
     gm_label             : which component is GM; the other is WM
     logger               : pdnl_sana logger, needed to open the slide below
-    input_slide          : path to the WSI; with it the cell overlay is drawn,
-                           without it that one panel is left empty
+    input_slide          : path to the WSI; with it and `cells` the cell overlay
+                           is drawn, without either that one panel is left empty
+    cells                : (N, 4) cell array for the overlay panel
     n_scatter            : tissue pixels to subsample into the scatter panels
-    output_directory     : cells.npy is read from here and gmm_result.png written
-                           here; the figure is shown instead if None
+    output_directory     : gmm_result.png written here; shown instead if None
 
     Returns None.
     """
     # --- (0) Cells for the overlay panel; nothing else in the pipeline needs them ---
     # They are in slide (level 0) coordinates, so the slide is opened purely for
     # the downsample that puts them on the thumbnail.
-    cells, cells_ds = None, None
-    cells_f = os.path.join(output_directory, 'cells.npy') if output_directory else None
-    if input_slide is not None and cells_f is not None and os.path.exists(cells_f):
-        cells = np.load(cells_f)
+    cells_ds = None
+    if cells is not None and input_slide is not None:
         loader = pdnl_sana.slide.Loader(logger, input_slide)
         try:
             cells_ds = loader.converter.ds[loader.thumbnail_level]
@@ -239,7 +237,7 @@ def run_gmm(tb, tissue_mask, features, logger=None, debug=False,
     logger      : optional pdnl_sana logger for progress output
     debug       : draw the eight-panel figure through viz_gmm_result
     output_directory : where that figure goes; shown instead if None
-    kwargs      : input_slide -- for the debug figure's cell overlay only
+    kwargs      : input_slide, cells -- for the debug figure's cell overlay only
 
     Returns (gm_prob, tissue_mask_features): the (H, W) GM posterior, zero outside
     the tissue, and the (H, W) bool tissue mask it was scored on.  Both feed
@@ -302,7 +300,7 @@ def run_gmm(tb, tissue_mask, features, logger=None, debug=False,
         viz_gmm_result(tb, tissue_mask_features, soma_density, soma_size, inliers,
                        X_scaled_tissue, labels, gmm, gm_label,
                        logger=logger, input_slide=kwargs.get('input_slide'),
-                       output_directory=output_directory)
+                       cells=kwargs.get('cells'), output_directory=output_directory)
 
     # Scatter the per-tissue-pixel GM posterior back onto the grid.  post_process
     # takes it from here: the CRF needs the posterior itself, and the hard
@@ -584,6 +582,6 @@ def render_contours(tb, gm_mask, wm_mask, tissue_mask, line_radius_px=3,
         ax.set_title(title, fontsize=11)
     ax.axis('off')
     fig.tight_layout()
-    _finish(fig, output_directory, 'GMWM_contour.png', dpi=300)
+    _finish(fig, output_directory, 'contour.png', dpi=300)
 
     return contours
