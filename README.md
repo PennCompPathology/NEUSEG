@@ -186,7 +186,7 @@ From the root of the repository, first set up the Python environment and install
    | Flag | Description |
    |---|---|
    | `-i`, `--input_slide` | Path to the input WSI (`.svs`, or any format OpenSlide can read). One file per run; to process a cohort, loop over slides or use **[`neuseg/run_cohort.py`](neuseg/run_cohort.py)**. |
-   | `-o`, `--output_directory` | Directory that receives every output for this slide (see **Outputs** below). Created automatically if it does not exist. Use **one directory per slide**: the output filenames are fixed, so slides sharing a directory would overwrite each other. |
+   | `-o`, `--output_directory` | Directory that receives every output for this slide (see **Outputs** below). Created automatically if it does not exist. Every output file is named after the input slide, so several slides may safely share one output directory. |
 
    **Frequently used options**
 
@@ -194,21 +194,22 @@ From the root of the repository, first set up the Python environment and install
    |---|---|---|
    | `--n_cores` | `1` | Number of worker processes used to segment nuclei and aggregate features. Set it to the number of cores you want to occupy; runtime for the nuclei stage scales close to linearly. |
    | `--debug_level` | `normal` | Console verbosity, and whether diagnostic figures are written. `quiet` → errors only; `normal` → progress bars and warnings; `debug` → adds per-stage parameters and statistics; `full` → maximum verbosity. **`debug` and `full` additionally write the four diagnostic PNGs** listed under **Outputs**. |
+   | `--debug_directory` | *(= `-o`)* | Where those diagnostic PNGs are written. Give each slide its own directory here when several slides share one `-o`, since the figure filenames are fixed. Created automatically, and only when figures are actually written. |
    | `--entrypoint` | `cells` | Which stage to start from, reusing the intermediate files already in `-o`. See below. |
 
    **Stages and `--entrypoint`**
 
-   The pipeline runs in four stages, each writing intermediate files that the next
-   one reads. `--entrypoint` skips straight to a stage instead of recomputing
-   everything, which makes tuning the segmentation cheap: the `cells` stage
-   dominates runtime, while `cortex` takes seconds.
+   The pipeline runs in four stages, each writing arrays into the slide's outputs
+   archive that the next one reads back. `--entrypoint` skips straight to a stage
+   instead of recomputing everything, which makes tuning the segmentation cheap:
+   the `cells` stage dominates runtime, while `cortex` takes seconds.
 
-   | Value | Starts at | Requires already in `-o` |
+   | Value | Starts at | Requires already in the archive |
    |---|---|---|
    | `cells` *(default)* | Nuclei segmentation over the whole WSI (the full pipeline) | nothing |
-   | `features` | Aggregating nuclei into the feature heatmaps | `cells.npy`, `thumbnail.png` |
-   | `tissue` | Tissue-mask stage | `feature_heatmap.npy` |
-   | `cortex` | Tissue mask → GMM → CRF → contours | `feature_heatmap.npy`, `thumbnail.png` |
+   | `features` | Aggregating nuclei into the feature heatmaps | `cells`, `thumbnail` |
+   | `tissue` | Tissue-mask stage | `feature_heatmap` |
+   | `cortex` | Tissue mask → GMM → CRF → contours | `feature_heatmap`, `thumbnail`, `tissue_mask` |
 
    So to re-run only the GM/WM segmentation after an initial full run, for example
    to inspect the diagnostic figures, reuse the existing outputs:
@@ -232,33 +233,61 @@ From the root of the repository, first set up the Python environment and install
 
 3. **Outputs**
 
-   All results are written into the directory given by `-o`, one directory per
-   slide. Which files appear depends on `--entrypoint`; a default full run
-   produces all of them.
+   Every array the pipeline produces goes into a **single compressed archive**
+   inside the directory given by `-o`:
 
-   **Data files** (always written)
+```text
+   <output_directory>/<slide_name>_neuseg.npz
+```
 
-   | File | Stage | Contents |
+   where `<slide_name>` is the input filename minus its extension, so
+   `Data/slide.svs` yields `slide_neuseg.npz`. Each stage adds its arrays to the
+   archive and leaves the earlier ones in place; which keys are present therefore
+   depends on `--entrypoint`, and a default full run produces all of them.
+
+   Load it with `np.load`, which returns a dict-like object keyed by the names
+   below:
+
+   ```python
+   import json
+   import numpy as np
+
+   with np.load('GM_WM_Seg_Results/slide/slide_neuseg.npz') as z:
+       print(z.files)                            # which stages have run
+       gm_mask = z['gm_mask']
+       contours = json.loads(str(z['gmwm_contours']))
+   ```
+
+   **Archive contents** (always written)
+
+   | Key | Stage | Contents |
    |---|---|---|
-   | `thumbnail.png` | `cells` | Low-resolution RGB thumbnail of the WSI. Every later stage works on this grid, and the final masks are returned at this resolution. |
-   | `tissue_mask.npy` | `cells`, then `cortex` | Tissue mask at thumbnail resolution. The `cells` stage writes a preliminary mask, used only to skip background while segmenting nuclei. The `cortex` stage then **overwrites it** with the refined mask from [`tissue_extraction.py`](neuseg/tissue_extraction.py), so the file always holds the mask the GM/WM segmentation was actually run against. |
-   | `cells.npy` | `cells` | `(N, 4)` array, one row per segmented nucleus: `x`, `y` (level-0 slide pixels), soma area, and mean hematoxylin intensity. |
-   | `feature_heatmap.npy` | `features` | `(H, W, 3)` array of the aggregated morphometric maps: channel `0` soma density, `1` average soma size, `2` average soma intensity. |
-   | `gm_mask.npy` | `cortex` | `(h, w)` boolean gray matter mask at thumbnail resolution. |
-   | `wm_mask.npy` | `cortex` | `(h, w)` boolean white matter mask; together with `gm_mask.npy` it partitions the tissue. |
-   | `gmwm_contours.json` | `cortex` | Boundary polygons in thumbnail pixel coordinates: `{"shape": [h, w], "gm_wm": [...], "gm_csf": [...]}`, where each boundary is a list of `[[x, y], ...]` rings. |
+   | `thumbnail` | `cells` | `(h, w, 3)` `uint8` RGB thumbnail of the WSI. Every later stage works on this grid, and the final masks are returned at this resolution. |
+   | `tissue_mask` | `cells` | `(h, w, 1)` `uint8` tissue mask at thumbnail resolution, `1` inside tissue, from [`tissue_extraction.py`](neuseg/tissue_extraction.py). Written once, while segmenting nuclei, and reused unchanged by `cortex`, so it always holds the mask the GM/WM segmentation was run against. |
+   | `cells` | `cells` | `(N, 4)` array, one row per segmented nucleus: `x`, `y` (level-0 slide pixels), soma area, and mean hematoxylin intensity. |
+   | `feature_heatmap` | `features` | `(H, W, 2)` `float32` array of the aggregated morphometric maps: channel `0` soma density, `1` average soma size. (A third channel, average soma intensity, is computed for the diagnostic figure but not stored — the GMM does not use it.) |
+   | `gm_mask` | `cortex` | `(h, w)` boolean gray matter mask at thumbnail resolution. |
+   | `wm_mask` | `cortex` | `(h, w)` boolean white matter mask; together with `gm_mask` it partitions the tissue. |
+   | `gmwm_contours` | `cortex` | Boundary polygons as a **JSON string** in a 0-d array; recover it with `json.loads(str(z['gmwm_contours']))`. Gives `{"shape": [h, w], "gm_wm": [...], "gm_csf": [...]}` in thumbnail pixel coordinates, where each boundary is a list of `[[x, y], ...]` rings. |
+
+   `gmwm_contours` is the last key written, which makes it the marker of a
+   finished slide — [`run_cohort.py`](neuseg/run_cohort.py) tests for it to skip
+   slides already done and resume an interrupted cohort run.
 
    **Diagnostic figures** (only when `--debug_level` is `debug` or `full`)
+
+   Written to `--debug_directory`, which defaults to `-o`.
 
    | File | Stage | What it shows |
    |---|---|---|
    | `run_features_output.png` | `features` | Four panels: the segmented nuclei plotted over the thumbnail, then the three feature maps (soma density, average soma size, average soma intensity). The title records `window_size` in µm, level-0 and thumbnail pixels, the Gaussian σ used to smooth them, and `ds_thumbnail`. |
    | `gmm_result.png` | `cortex` | Eight panels tracing the GM/WM fit from raw cells to labels. **Top row:** thumbnail, segmented nuclei, and the density and size maps restricted to tissue, with pixels excluded from the fit marked in cyan. **Bottom row:** the resulting GM/WM labels over the thumbnail, then the standardized feature space as a scatter, coloured by fitted component with each component's mean and 1/2/3-σ ellipses, and again coloured by raw density and raw size. Useful for confirming the two components really separate. |
    | `post_process.png` | `cortex` | Three panels showing spatial refinement step by step: the raw GMM labels, the result after CRF smoothing, and the result after small disconnected regions are pruned. Pixels changed by each step are marked in red and counted in the legend. |
-   | `GMWM_contour.png` | `cortex` | The final segmentation: the thumbnail with GM and WM tinted, overlaid with the three extracted boundaries: GM–WM (green), GM–background (magenta), and WM–background (black). |
+   | `contour.png` | `cortex` | The final segmentation: the thumbnail with GM and WM tinted, overlaid with the three extracted boundaries: GM–WM (green), GM–background (magenta), and WM–background (black). |
 
-   A plain-text run log is also written to `NEUSEG.log`, in the **current working
-   directory** rather than in `-o`.
+   A pickled logger state is also written beside the archive as
+   `<slide_name>_log.pkl`, and a plain-text run log to `NEUSEG.log` in the
+   **current working directory** rather than in `-o`.
 
 ## Citation
 [NEUSEG: Interpretable Unsupervised Gray/White Matter Segmentation for Brain Histopathology WSIs](https://ieeexplore.ieee.org/document/11515902)
