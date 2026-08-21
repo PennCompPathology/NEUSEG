@@ -41,11 +41,9 @@ refactor_out/
 sana/
 
 # -------------------------------------------------
-# Ignore sibling PDNL package repos checked out here
+# Ignore batch_run_scripts spreadsheet data
 # -------------------------------------------------
-pdnl_extract/
-pdnl_process/
-pdnl_aggregate/
+batch_run_scripts/*.csv
 
 # -------------------------------------------------
 # Ignore evaluation result artifacts
