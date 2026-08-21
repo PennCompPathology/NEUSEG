@@ -111,7 +111,7 @@ def main():
             if 'feature_heatmap' in arrs else None
         arrs.close()
 
-    if args.entrypoint == 'cells' or 'cells' is None:
+    if args.entrypoint == 'cells' or cells is None:
         # extract the cells from the counterstain
         cells, tissue_mask, thumbnail = segment_nuclei_wsi(
             logger=logger, output_path=output_path,
