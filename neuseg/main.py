@@ -35,6 +35,8 @@ import pdnl_sana.quantify
 from .nuclei import segment_nuclei_wsi, aggregate_nuclei_features
 from .tissue import segment_wm
 
+NEUSEG_VERSION = "v1_0"
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--input_slide', 
@@ -81,6 +83,8 @@ def main():
     slide_name = os.path.splitext(os.path.basename(args.input_slide))[0]
     logger_fpath = os.path.join(args.output_directory, slide_name+'_log.pkl')
     logger = pdnl_sana.logging.Logger(args.debug_level, logger_fpath, name="NEUSEG")
+    logger.data['VERSION'] = NEUSEG_VERSION
+
     output_path = os.path.join(args.output_directory, slide_name+'.npz')
     logger.debug(f'Saving outputs to {args.output_directory}')
 
