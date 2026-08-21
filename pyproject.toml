@@ -20,6 +20,7 @@ dependencies = [
 	     "pymaxflow",
 	     "diptest",
 	     "scikit-fmm",
+	     "pdnl_sana",
 ]
 readme = "README.md"
 requires-python = ">=3.12"
