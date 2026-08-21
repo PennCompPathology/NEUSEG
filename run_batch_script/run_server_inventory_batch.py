@@ -21,7 +21,7 @@ Usage
 selected: `--region MFC ANG --antibody AT8 TDP43` is four combinations.  Add
 --dry-run to the same command to check the server without downloading anything.
 
-Outputs go to <output-dir>/<Region>/<Antibody>/<slide>_neuseg.npz, with a log in
+Outputs go to <output-dir>/<Region>/<Antibody>/<slide>.npz, with a log in
 <output-dir>/batch_log_<regions>_<antibodies>.txt.  Slides that already have an
 npz are skipped, so re-running the same command resumes an interrupted batch.
 """
@@ -78,15 +78,17 @@ def _argument_builder():
                         default=os.path.join(tempfile.gettempdir(), "neuseg_slides"),
                         help="where each slide is downloaded to, then deleted")
     
-    parser.add_argument("--main-py",
-                        # main.py location in this git repo, relative to this script; the user can override it with an absolute path
-                        default=os.path.normpath(
-                            os.path.join(os.path.dirname(__file__), "..", "neuseg", "main.py")),
-                        help="path to NEUSEG main.py (default: ../neuseg/main.py)")
+    parser.add_argument("--neuseg",
+                        # The console script `pip install -e .` puts next to the
+                        # interpreter, so it always comes from this same env.
+                        default=os.path.join(os.path.dirname(sys.executable), "neuseg"),
+                        help="path to the neuseg command (default: alongside this python)")
     parser.add_argument("--n-cores", type=int, default=8, help="cores for main.py")
     parser.add_argument("--entrypoint", default="cells",
-                        choices=["cells", "features", "tissue", "cortex"],
+                        choices=["cells", "features", "wm", "cortex"],
                         help="where main.py starts in the NEUSEG algorithm")
+    parser.add_argument("--staining-code", default="HDAB", choices=["HDAB", "CVDAB"],
+                        help="how the slides were stained")
     parser.add_argument("--debug-level", default="normal",
                         choices=["quiet", "normal", "debug", "full"],
                         help="how much main.py prints")
@@ -94,8 +96,9 @@ def _argument_builder():
 
     if not os.path.exists(args.csv):
         parser.error(f"no spreadsheet at {args.csv} -- pass --csv")
-    if not os.path.exists(args.main_py):
-        parser.error(f"no main.py at {args.main_py} -- pass --main-py")
+    if not os.path.exists(args.neuseg):
+        parser.error(f"no neuseg command at {args.neuseg} -- run "
+                     "`pip install -e . --no-deps` in the NEUSEG repo, or pass --neuseg")
     return args
 
 
@@ -194,12 +197,17 @@ def run_batch(df, args, flags, target):
             # 1. download over the SSH connection already open.  scp hands the
             # remote path to a shell on chead, so quote it: a space or a "(2)" in
             # the filename would otherwise be split into separate arguments.
-            subprocess.run(["scp", *flags, f"{target}:{shlex.quote(row.ServerDirectory)}",
+            # -O pins the original SCP protocol (the default here, but not from
+            # OpenSSH 9 on) and -T drops its filename check, which the quotes
+            # would otherwise trip: the server answers with the unquoted name.
+            subprocess.run(["scp", "-O", "-T", *flags,
+                            f"{target}:{shlex.quote(row.ServerDirectory)}",
                             local_slide], check=True)
             # 2-3. run NEUSEG, writing the npz straight into <Region>/<Antibody>/
-            subprocess.run([sys.executable, args.main_py, "-i", local_slide, "-o", out_dir,
+            subprocess.run([args.neuseg, "-i", local_slide, "-o", out_dir,
                             "--n_cores", str(args.n_cores),
                             "--entrypoint", args.entrypoint,
+                            "--staining_code", args.staining_code,
                             "--debug_level", args.debug_level], check=True)
             tally["success"] += 1
         except subprocess.CalledProcessError as error:
@@ -258,6 +266,7 @@ def main():
         log(args, f"  output_dir:  {os.path.abspath(args.output_dir)}/<Region>/<Antibody>")
         log(args, f"  n_cores:     {args.n_cores}")
         log(args, f"  entrypoint:  {args.entrypoint}")
+        log(args, f"  staining:    {args.staining_code}")
         log(args, f"  debug_level: {args.debug_level}")
 
         # Run NEUSEG on each slide, one at a time, downloading and deleting each slide in turn.
