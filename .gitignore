@@ -41,9 +41,9 @@ refactor_out/
 sana/
 
 # -------------------------------------------------
-# Ignore batch_run_scripts spreadsheet data
+# Ignore run_batch_script spreadsheet data
 # -------------------------------------------------
-batch_run_scripts/*.csv
+run_batch_script/*.csv
 
 # -------------------------------------------------
 # Ignore evaluation result artifacts
