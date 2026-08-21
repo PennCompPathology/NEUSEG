@@ -29,6 +29,7 @@ npz are skipped, so re-running the same command resumes an interrupted batch.
 import argparse
 import contextlib
 import os
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -173,10 +174,10 @@ def run_batch(df, args, flags, target):
         # Path ot .svs on chead, e.g. /data/chead/ANG/AT8/ANG_AT8_0001.svs
         slide = os.path.basename(row.ServerDirectory)
         
-        # The npz output goes under <output_dir>/<Region>/<Antibody>/<slide>_neuseg.npz
+        # The npz output goes under <output_dir>/<Region>/<Antibody>/<slide>.npz
         out_dir = os.path.join(args.output_dir, row.Region, row.Antibody)
-        npz = os.path.join(out_dir, os.path.splitext(slide)[0] + "_neuseg.npz")
-        
+        npz = os.path.join(out_dir, os.path.splitext(slide)[0] + ".npz")
+
         # skip if the npz already exists, meaning this slide has already been processed
         if os.path.exists(npz):
             tally["skipped"] += 1
@@ -190,9 +191,11 @@ def run_batch(df, args, flags, target):
         local_slide = os.path.join(args.tmp_dir, slide)
         slide_start, status = time.monotonic(), "OK"
         try:
-            # 1. download over the SSH connection already open
-            subprocess.run(["scp", *flags, f"{target}:{row.ServerDirectory}", local_slide],
-                           check=True)
+            # 1. download over the SSH connection already open.  scp hands the
+            # remote path to a shell on chead, so quote it: a space or a "(2)" in
+            # the filename would otherwise be split into separate arguments.
+            subprocess.run(["scp", *flags, f"{target}:{shlex.quote(row.ServerDirectory)}",
+                            local_slide], check=True)
             # 2-3. run NEUSEG, writing the npz straight into <Region>/<Antibody>/
             subprocess.run([sys.executable, args.main_py, "-i", local_slide, "-o", out_dir,
                             "--n_cores", str(args.n_cores),
