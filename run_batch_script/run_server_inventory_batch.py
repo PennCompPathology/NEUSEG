@@ -1,9 +1,29 @@
-"""Select rows from the server inventory spreadsheet for given Region x Antibody combinations.
+r"""Select rows from the server inventory spreadsheet for given Region x Antibody combinations.
 
 The slides live on chead, so every run opens one SSH connection (a single password
 prompt), downloads each selected slide, runs NEUSEG on it, saves the npz under
 <Region>/<Antibody>/ of --output-dir, and deletes the download before moving on.
 Use --dry-run to see what is on the server without processing anything.
+
+Usage
+-----
+    conda activate neuseg
+
+    python run_server_inventory_batch.py \
+        --csv {path to server_inventory_ftld.csv} \
+        --region MFC ANG \
+        --antibody AT8 TDP43 \
+        --chead-userid {chead username} \
+        --n-cores {number of cores} \
+        --output-dir {Path to save npz outputs} \\
+
+--region and --antibody take several values, and every combination of the two is
+selected: `--region MFC ANG --antibody AT8 TDP43` is four combinations.  Add
+--dry-run to the same command to check the server without downloading anything.
+
+Outputs go to <output-dir>/<Region>/<Antibody>/<slide>_neuseg.npz, with a log in
+<output-dir>/batch_log_<regions>_<antibodies>.txt.  Slides that already have an
+npz are skipped, so re-running the same command resumes an interrupted batch.
 """
 
 import argparse
@@ -34,8 +54,14 @@ pd.set_option("display.width", 250)
 
 
 def _argument_builder():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--csv", required=True, help="path to the server inventory spreadsheet")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--csv",
+                        # sibling of this script in the repo, wherever it was cloned
+                        default=os.path.normpath(
+                            os.path.join(os.path.dirname(__file__), "server_inventory_ftld.csv")),
+                        help="path to the server inventory spreadsheet "
+                             "(default: server_inventory_ftld.csv next to this script)")
     parser.add_argument("--region", nargs="+", default=REGIONS, help="regions to select")
     parser.add_argument("--antibody", nargs="+", default=ANTIBODIES, help="antibodies to select")
     parser.add_argument("--has-slide", default="True", choices=["True", "False"],
@@ -65,6 +91,8 @@ def _argument_builder():
                         help="how much main.py prints")
     args = parser.parse_args()
 
+    if not os.path.exists(args.csv):
+        parser.error(f"no spreadsheet at {args.csv} -- pass --csv")
     if not os.path.exists(args.main_py):
         parser.error(f"no main.py at {args.main_py} -- pass --main-py")
     return args
