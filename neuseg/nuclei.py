@@ -288,7 +288,7 @@ def aggregate_nuclei_features(cells: np.ndarray, tb: sana.image.Frame,
     # define the upper left coordinates of each chunk 
     # NOTE: this is for memory management purposes and does not affect the heatmaps
     # TODO: test 2048 and 4096?
-    chunk_size = 2048
+    chunk_size = 2000
     chunk_size = sana.geo.Point(chunk_size, chunk_size, is_micron=False, level=0)
     chunk_size_out = converter.to_pixels(chunk_size.copy(), level=tb.level) / ds_thumbnail
     chunk_xs = np.arange(0, w_out + chunk_size_out[0], chunk_size_out[0])
@@ -302,6 +302,12 @@ def aggregate_nuclei_features(cells: np.ndarray, tb: sana.image.Frame,
     feature_heatmap = sana.image.Frame(np.zeros((h_out, w_out, 3), dtype=float))
     job_args = []
     for (chunk_y_out, chunk_x_out) in tqdm([(y, x) for y in chunk_ys for x in chunk_xs], desc='Preparing Aggregation'):
+        chunk_loc_out = sana.geo.point_like(window_size_out, chunk_x_out, chunk_y_out)
+        chunk_loc_out_padded = chunk_loc_out - window_size_out / 2
+        chunk_loc_out_padded.translate(window_size_out / 2)
+        chunk_size_out_padded = chunk_size_out + 2*window_size_out
+        chunk_loc_padded = chunk_loc_out_padded * ds_slide
+        chunk_size_padded = chunk_size_out_padded * ds_slide
 
         # pad the chunk by the window size to center the output heatmap pixels
         x0_out = chunk_x_out - window_size_out[0] / 2
@@ -314,7 +320,9 @@ def aggregate_nuclei_features(cells: np.ndarray, tb: sana.image.Frame,
         loc, size = sana.geo.Point(x0, y0), sana.geo.Point(x1, y1)
 
         # get the valid cells for this chunk
-        chunk_sample_idxs = sana.quantify.find_local_samples(cells[:,0], cells[:,1], loc, size)
+        #chunk_sample_idxs = sana.quantify.find_local_samples(cells[:,0], cells[:,1], loc, size)
+        chunk_sample_idxs = sana.quantify.find_local_samples(
+            cells[:,0], cells[:,1], chunk_loc_padded, chunk_size_padded)
         chunk_cells = cells[chunk_sample_idxs].copy()
         if len(chunk_cells) == 0:
             continue
@@ -324,7 +332,6 @@ def aggregate_nuclei_features(cells: np.ndarray, tb: sana.image.Frame,
         j0 = int(round(np.clip(chunk_y_out, 0, h_out-1)))
         i1 = int(round(np.clip(chunk_x_out + chunk_size_out[0], 0, w_out-1)))
         j1 = int(round(np.clip(chunk_y_out + chunk_size_out[1], 0, h_out-1)))
-
         job_args.append({'window_size': window_size_slide, 'cells': chunk_cells, 'i0': i0, 'j0': j0, 'i1': i1, 'j1': j1, 'ds': ds_slide})
 
     # generate the feature heatmap and write to disk
