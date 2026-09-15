@@ -21,6 +21,7 @@ from tqdm import tqdm
 import numpy as np
 from matplotlib import pyplot as plt
 
+import cv2
 from skimage.transform import resize
 
 import pdnl_sana as sana
@@ -33,7 +34,7 @@ import pdnl_sana.segment
 import pdnl_sana.quantify
 
 from .nuclei import segment_nuclei_wsi, aggregate_nuclei_features
-from .tissue import segment_wm
+from .tissue import segment_wm, measure_cortical_angles
 
 NEUSEG_VERSION = "v1_0"
 
@@ -94,7 +95,9 @@ def main():
     tissue_mask = None
     cells = None
     feature_heatmap = None
-    segmentations = None
+    wm_mask = None
+    layers = None
+    print(logger.data)
     if os.path.exists(output_path):
         arrs = np.load(output_path)
         if 'thumbnail' in arrs:
@@ -107,11 +110,18 @@ def main():
             tissue_mask = sana.image.frame_like(thumbnail, arrs['tissue_mask'])
         cells = arrs['cells'] \
             if 'cells' in arrs else None
-        feature_heatmap = sana.image.Frame(arrs['feature_heatmap']) \
+        feature_heatmap = sana.image.frame_like(thumbnail, arrs['feature_heatmap']) \
             if 'feature_heatmap' in arrs else None
+        try:
+            gm_mask = sana.image.frame_like(thumbnail, arrs['gm_mask']) \
+                if 'gm_mask' in arrs else None
+            wm_mask = sana.image.frame_like(thumbnail, arrs['wm_mask']) \
+                if 'wm_mask' in arrs else None
+        except:
+            pass
         arrs.close()
 
-    if args.entrypoint == 'cells' or 'cells' is None:
+    if args.entrypoint == 'cells' or cells is None:
         # extract the cells from the counterstain
         cells, tissue_mask, thumbnail = segment_nuclei_wsi(
             logger=logger, output_path=output_path,
@@ -127,12 +137,71 @@ def main():
             logger=logger, output_path=output_path,
             **vars(args)
         )
-    if args.entrypoint == 'wm' or segmentations is None:
+    if args.entrypoint == 'wm' or wm_mask is None:
         gm_mask, wm_mask, contours = segment_wm(
             feature_heatmap=feature_heatmap, tissue_mask=tissue_mask, tb=thumbnail, 
             logger=logger, output_path=output_path,
             **vars(args)
         )
+    if args.entrypoint == 'cortex' or layers is None:
+        gm_mask, wm_mask, cortical_angles = measure_cortical_angles(
+            gm_mask=gm_mask, wm_mask=wm_mask, tissue_mask=tissue_mask, 
+            tb=thumbnail, cells=cells,
+            logger=logger, output_path=output_path,
+            **vars(args)
+        )
+        wm_polys = wm_mask.to_polygons()[0]
+        valid = []
+        for i in range(cells.shape[0]):
+            x,y,area,intensity = cells[i]
+            for poly in wm_polys:
+                if sana.geo.ray_tracing(x, y, poly*logger.data['ds'][thumbnail.level]):
+                    break
+            else:
+                valid.append(i)
+        gm_cells = cells[np.array(valid)]
+        print(cells.shape, gm_cells.shape)
+
+        args.window_size = 1000
+        cortical_features = aggregate_nuclei_features(cells=gm_cells, tb=thumbnail, 
+                                mpp=logger.data['mpp'],
+                                ds=logger.data['ds'],
+                                level_dimensions=logger.data['level_dimensions'],
+                                cortical_angles=cortical_angles.copy(),
+                                cortical_mask=gm_mask.copy(),
+                                **vars(args),
+                                )
+
+        h, w = thumbnail.img.shape[:2]
+        fig, axs = plt.subplots(2,3, sharex=True, sharey=True)
+        axs = axs.ravel()
+        axs[0].imshow(gm_mask.img, cmap='gray')
+        axs[1].imshow(wm_mask.img, cmap='gray')
+        axs[2].imshow(tissue_mask.img, cmap='gray')
+        axs[3].imshow(cortical_angles.img, cmap='gray')
+        axs[3].set_title("Tangent Angle of WM Segmentation")
+        axs[4].imshow(feature_heatmap.img[:,:,0], cmap='inferno', extent=(0,w,h,0))
+        axs[4].set_title("Density used for WM Seg")
+        axs[5].imshow(cortical_features.img[:,:,0], cmap='inferno', extent=(0,w,h,0), vmax=0.001)
+        axs[5].set_title("Density used for Layer Seg")
+
+        fig, axs = plt.subplots(2,3, sharex=True, sharey=True)
+        titles = ['Density', 'Area', 'Intensity']
+        for i in range(3):
+            if i < 2:
+                axs[0][i].imshow(feature_heatmap.img[:,:,i], cmap='inferno')
+                axs[0][i].set_title(titles[i])
+                [axs[0][i].plot(*x.T / args.ds_thumbnail, color='white') for x in wm_polys]
+            #axs[1][i].imshow(cortical_features.img[:,:,i], cmap='inferno')
+            x = cortical_features.img[:,:,i]
+            mu, sg = np.nanmean(x[x != 0]), np.nanstd(x[x != 0])
+            x = np.clip(x, mu-1*sg, mu+3*sg)
+            axs[1][i].imshow(x, cmap='inferno')
+            axs[1][i].set_title(titles[i])
+            [axs[1][i].plot(*x.T / args.ds_thumbnail, color='white') for x in wm_polys]
+
+
+        plt.show()
 
 if __name__ == "__main__":
     main()

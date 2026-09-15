@@ -4,6 +4,7 @@ import tempfile
 
 import numpy as np
 from tqdm import tqdm
+import cv2
 
 import pdnl_sana as sana
 import pdnl_sana.logging
@@ -268,12 +269,14 @@ def aggregate_nuclei_features(cells: np.ndarray, tb: sana.image.Frame,
                               logger: sana.logging.Logger=None,
                               output_path: str=None,
                               ds_thumbnail: float=1, window_size: float=1000, 
+                              cortical_angles: sana.image.Frame=None,
+                              cortical_mask: sana.image.Frame=None,
                               n_cores: int=1, debug_directory: str="", **kwargs):
     if logger is None:
         if not output_path is None:
             logger_path = os.path.splitext(output_path)[0]+'.pkl'
         else:
-            logger_path = None
+            logger_path = ""
         logger = sana.logging.Logger('normal', fpath=logger_path)
 
     converter = sana.geo.Converter(mpp=mpp, ds=ds)
@@ -299,7 +302,11 @@ def aggregate_nuclei_features(cells: np.ndarray, tb: sana.image.Frame,
     window_size_out = converter.to_pixels(window_size.copy(), level=tb.level) / ds_thumbnail
     logger.data['window_size'] = window_size
 
-    feature_heatmap = sana.image.Frame(np.zeros((h_out, w_out, 3), dtype=float))
+    feature_heatmap = sana.image.frame_like(tb, np.zeros((h_out, w_out, 3), dtype=float))
+    if not cortical_angles is None:
+        cortical_angles.resize(feature_heatmap.size(), interpolation=cv2.INTER_AREA)
+        cortical_mask.resize(feature_heatmap.size(), interpolation=cv2.INTER_NEAREST)
+
     job_args = []
     for (chunk_y_out, chunk_x_out) in tqdm([(y, x) for y in chunk_ys for x in chunk_xs], desc='Preparing Aggregation'):
         chunk_loc_out = sana.geo.point_like(window_size_out, chunk_x_out, chunk_y_out)
@@ -331,8 +338,16 @@ def aggregate_nuclei_features(cells: np.ndarray, tb: sana.image.Frame,
         i0 = int(round(np.clip(chunk_x_out, 0, w_out-1)))
         j0 = int(round(np.clip(chunk_y_out, 0, h_out-1)))
         i1 = int(round(np.clip(chunk_x_out + chunk_size_out[0], 0, w_out-1)))
-        j1 = int(round(np.clip(chunk_y_out + chunk_size_out[1], 0, h_out-1)))
-        job_args.append({'window_size': window_size_slide, 'cells': chunk_cells, 'i0': i0, 'j0': j0, 'i1': i1, 'j1': j1, 'ds': ds_slide})
+        j1 = int(round(np.clip(chunk_y_out + chunk_size_out[1], 0, h_out-1)))        
+        job_args.append({
+            'window_size': window_size_slide, 'cells': chunk_cells, 
+            'i0': i0, 'j0': j0, 'i1': i1, 'j1': j1, 'ds': ds_slide})
+        if not cortical_angles is None:
+            # job_args[-1]['cortical_angles'] = cortical_angles.img[j0:j1, i0:i1, 0]
+            # job_args[-1]['valid_mask'] = cortical_mask.img[j0:j1, i0:i1, 0]
+            job_args[-1]['cortical_angles'] = cortical_angles.img[:,:,0]
+            job_args[-1]['valid_mask'] = cortical_mask.img[:,:,0]
+            job_args[-1]['apply_angles'] = True
 
     # generate the feature heatmap and write to disk
     for (out, i0, j0, i1, j1) in sana.utils.dispatch_jobs(sana.quantify.aggregate_cells, job_args, n_cores=n_cores, progress_str='Aggregating Cells'):

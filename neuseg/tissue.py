@@ -1,6 +1,7 @@
 
 import os
 import json
+import random
 
 import cv2
 import numpy as np
@@ -21,6 +22,8 @@ from scipy.ndimage import label, binary_dilation
 import pdnl_sana as sana
 import pdnl_sana.logging
 import pdnl_sana.image
+import pdnl_sana.filter
+import pdnl_sana.interpolate
 
 from matplotlib import pyplot as plt
 from matplotlib.colors import to_rgba, ListedColormap
@@ -125,43 +128,77 @@ def segment_wm(feature_heatmap: sana.image.Frame,
     gm_prob, tissue_mask_features = run_gmm(tb, tissue_mask, feature_heatmap, logger=logger, output_directory=debug_directory)
     logger.debug("Finished Training GMM")
 
-    # --- (2) Post-processing: CRF, then island pruning ---
+    # --- (2) Update probability map to thumbnail resolution ---
+    gm_prob = sana.image.frame_like(tissue_mask, gm_prob)
+    gm_prob.resize(tissue_mask.size(), interpolation=cv2.INTER_CUBIC)
+    gm_prob = np.clip(gm_prob.img, 0.0, 1.0)[:,:,0]
+
+    # --- (3) Post-processing: CRF, then island pruning ---
     # The heatmap is the thumbnail divided by --ds_thumbnail, so its microns per
     # pixel is the slide's scaled by both downsamples.  post_process needs it to
     # turn the island floor from mm2 into pixels.
     mpp_features = float(logger.data['mpp']) * logger.data['ds'][logger.data['thumbnail_level']] * logger.data['ds_thumbnail']
-    gm_mask, wm_mask = post_process(gm_prob, tissue_mask_features, 
+    gm_mask, wm_mask = post_process(gm_prob, tissue_mask, 
+                                    beta=0,
                                     mpp=mpp_features, logger=logger,
                                     output_directory=debug_directory)
     logger.debug("Finished Post Processing")
 
-    # --- (3) Put the masks on the thumbnail grid ---
-    # A no-op at --ds_thumbnail 1, where the heatmap already is the thumbnail.
-    # Last, not before (4): resampling moves the GM/WM boundary around, and the
-    # CRF has already settled where that boundary belongs.  Nearest-neighbour,
-    # since these are labels.
-    tissue_thumb = tissue_mask.img.squeeze().astype(bool)
-    if gm_mask.shape != tissue_thumb.shape:
-        gm_mask.resize(tissue_mask.size(), interpolation=cv2.INTER_NEAREST)
-        wm_mask.resize(tissue_mask.size(), interpolation=cv2.INTER_NEAREST)
-        gm_mask.mask(tissue_mask)
-        wm_mask.mask(tissue_mask)
-        wm_mask.mask(gm_mask, invert=True)
-
     # --- (4) Trace the GM/WM boundaries as polygons ---
-    contours = render_contours(tb, gm_mask, wm_mask, tissue_thumb,
+    contours = render_contours(tb, gm_mask, wm_mask, tissue_mask,
                                output_directory=debug_directory)
 
     # --- (5) Save ---
     # the contours go in as the json string itself, read back with
     if not output_path is None:
         sana.utils.save_arrays(output_path, 
-                               gm_mask=gm_mask, wm_mask=wm_mask,
-                               gmwm_contours=np.array(json.dumps(contours)))
+                               gm_mask=gm_mask.img, wm_mask=wm_mask.img)
+        sana.utils.write_geojson(output_path.replace('.npz', '.geojson'), contours)
         logger.debug(f"GM/WM masks and contours saved to: {output_path}")
 
     return gm_mask, wm_mask, contours
 
+def measure_cortical_angles(gm_mask: sana.image.Frame, 
+                   wm_mask: sana.image.Frame, 
+                   tissue_mask: sana.image.Frame,
+                   tb: sana.image.Frame,
+                   cells: np.ndarray,
+                   logger: sana.logging.Logger=None,
+                   output_path: str=None, 
+                   **kwargs):
+
+    f = sana.filter.MorphologyFilter('opening', 'ellipse', 5)
+    wm_mask.apply_morphology_filter(f)
+    gm_mask = tissue_mask.copy(); gm_mask.mask(wm_mask, invert=True)
+
+    contours = render_contours(
+        tb=tb, gm_mask=gm_mask, wm_mask=wm_mask, tissue_mask=tissue_mask)
+    wm_polys = [x.to_polygon() for x in contours if x.class_name == 'wm']
+    wm_holes = [x.to_polygon() for x in contours if x.class_name == 'wm_holes']
+
+    wm_polys = [sana.interpolate.interp_poly(x) for x in wm_polys]
+
+    ds = 8
+    cortical_angles = sana.image.frame_like(gm_mask, np.zeros_like(gm_mask.img, dtype=float))
+    cortical_angles.resize(cortical_angles.size()//ds)
+    gm_mask_ds = gm_mask.copy(); gm_mask_ds.resize(cortical_angles.size(), interpolation=cv2.INTER_NEAREST)
+    tissue_mask_ds = tissue_mask.copy(); tissue_mask_ds.resize(cortical_angles.size(), interpolation=cv2.INTER_NEAREST)    
+    wm_pts = np.concatenate(wm_polys, axis=0) / ds
+
+    idxs = [(j,i) for j in range(cortical_angles.img.shape[0]) for i in range(cortical_angles.img.shape[1])]
+    for (j,i) in tqdm(idxs):
+        if tissue_mask_ds.img[j,i] == 0:
+            continue
+        pt = np.array([i,j])
+        dist = np.sqrt(np.sum(np.square(wm_pts - pt[None,:]), axis=1))
+        wm = wm_pts[np.argmin(dist)]
+        x,y = pt-wm
+        angle = np.arctan2(y,x)
+        cortical_angles.img[j,i] = angle
+    cortical_angles.resize(gm_mask.size(), interpolation=cv2.INTER_CUBIC)
+
+    return gm_mask, wm_mask, cortical_angles
+    
 def background_threshold(img, bins=None, smooth_div=100, peak_prom=0.05, valley_prom=0.005):
     """Find the grey level separating blank slide from tissue, anchored on the background peak.
 
@@ -229,10 +266,10 @@ def run_gmm(tb: sana.image.Frame, tissue_mask: sana.image.Frame,
 
     # --- (1) Split the heatmap into the features the GMM is fit on ---
     soma_density, soma_size = features.img[:,:,0], features.img[:,:,1]
-
-    # --- (2) Put the tissue mask on the same grid as the features ---
-    tissue_mask_features = tissue_mask.copy(); tissue_mask_features.resize(tissue_mask.size(), interpolation=cv2.INTER_NEAREST)
     
+    # --- (2) Put the tissue mask on the same grid as the features ---
+    tissue_mask_features = tissue_mask.copy(); tissue_mask_features.resize(features.size(), interpolation=cv2.INTER_NEAREST)
+
     # --- (3) Keep only the tissue pixels ---
     soma_density_tissue = soma_density[tissue_mask_features.img[:,:,0] != 0]
     soma_size_tissue = soma_size[tissue_mask_features.img[:,:,0] != 0]
@@ -388,6 +425,8 @@ def post_process(gm_prob, tissue_mask, mpp, beta=8, connectivity=8, min_island_m
         viz_post_process((gm_prob > 0.5) & tissue, gm_crf, gm, tissue,
                          output_directory=output_directory)
 
+    gm = sana.image.frame_like(tissue_mask, gm.astype(np.uint8))
+    wm = sana.image.frame_like(tissue_mask, wm.astype(np.uint8))
     return gm, wm
 
 def crf_potts(gm_prob, tissue_mask, beta=None, connectivity=8, eps=1e-6):
@@ -673,9 +712,9 @@ def render_contours(tb, gm_mask, wm_mask, tissue_mask, line_radius_px=3,
     of [[x, y], ...] rings in thumbnail pixels, ready to hand to json.dump.
     """
     # --- (1) Make the three regions exclusive and tissue-bounded ---
-    tissue = tissue_mask.astype(bool)
-    gm = gm_mask.astype(bool) & tissue
-    wm = wm_mask.astype(bool) & tissue & ~gm         # GM wins any overlap
+    tissue = tissue_mask.img != 0
+    gm = (gm_mask.img != 0) & tissue
+    wm = (wm_mask.img != 0) & tissue & ~gm
     bg = ~tissue
 
     # --- (2) Trace the two boundaries the downstream analysis names ---
@@ -684,12 +723,15 @@ def render_contours(tb, gm_mask, wm_mask, tissue_mask, line_radius_px=3,
     # returns (bodies, holes) and the holes are boundaries too -- a WM island inside
     # GM, an enclosed CSF space inside the tissue -- so both go in.
     def rings(mask):
-        bodies, holes = pdnl_sana.image.Frame(mask.astype(np.uint8)).to_polygons()
-        return [np.asarray(ring).tolist() for ring in bodies + holes]
+        return pdnl_sana.image.Frame(mask.astype(np.uint8)).to_polygons()
 
-    contours = {'shape': list(tissue.shape),
-                'gm_wm': rings(wm),
-                'gm_csf': rings(tissue)}
+    wmb, wmh = rings(wm)
+    csfb, csfh = rings(tissue)
+    contours = []
+    contours += [x.to_annotation(class_name='wm') for x in wmb]
+    contours += [x.to_annotation(class_name='wm_holes') for x in wmh]
+    contours += [x.to_annotation(class_name='tissue') for x in csfb]
+    contours += [x.to_annotation(class_name='tissue_holes') for x in csfh]
 
     if not debug:
         return contours
