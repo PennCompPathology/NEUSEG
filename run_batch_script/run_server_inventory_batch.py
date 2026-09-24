@@ -10,20 +10,24 @@ Usage
     conda activate neuseg
 
     python run_server_inventory_batch.py \
-        --csv {path to server_inventory_ftld.csv} \
         --region MFC ANG \
         --antibody AT8 TDP43 \
+        --pathology FTLD-Tau FTLD-TDP \
         --chead-userid {chead username} \
         --n-cores {number of cores} \
         --output-dir {Path to save npz outputs} \\
 
---region and --antibody take several values, and every combination of the two is
-selected: `--region MFC ANG --antibody AT8 TDP43` is four combinations.  Add
---dry-run to the same command to check the server without downloading anything.
+--region, --antibody and --pathology take several values, and every combination is
+selected: `--region MFC ANG --antibody AT8 TDP43` is four combinations.  Each one
+left out defaults to every value in the spreadsheet, so omitting --pathology keeps
+all five and filters nothing.  Add --dry-run to check the server without
+downloading anything.
 
 Outputs go to <output-dir>/<Region>/<Antibody>/<slide>.npz, with a log in
-<output-dir>/batch_log_<regions>_<antibodies>.txt.  Slides that already have an
-npz are skipped, so re-running the same command resumes an interrupted batch.
+<output-dir>/batch_log_<regions>_<antibodies>.txt.  A slide is skipped once its
+npz holds every key a finished run writes, so re-running the same command
+resumes an interrupted batch; a partial npz left behind by a slide that died
+mid-pipeline is processed again rather than taken for a finished one.
 """
 
 import argparse
@@ -34,12 +38,23 @@ import subprocess
 import sys
 import tempfile
 import time
+import zipfile
 
+import numpy as np
 import pandas as pd
 
-REGIONS = ["ANG", "MFC", "OFC", "SMTC", "aCING"]
-ANTIBODIES = ["AT8", "CD68", "GFAP", "HLADR", "IBA1", "NeuN", "SMI32", "TDP43"]
+INVENTORY_CSV = os.path.join("inventory_spreadsheets", "server_inventory_v2.csv")
+# Every value the inventory spreadsheet uses, so the defaults select the whole file.
+REGIONS = ["AMY", "ANG", "HIP", "LENT", "MFC", "OFC", "SMTC", "STRI", "aCING"]
+ANTIBODIES = ["AT8", "CD68", "GFAP", "HLADR", "IBA1", "MJFR13", "Nab228", "NeuN", "SMI32", "TDP43"]
+PATHOLOGIES = ["AD", "Control", "FTLD-TDP", "FTLD-Tau", "LBD"]
 CHEAD_HOST = "chead.uphs.upenn.edu"
+# Every key a finished run leaves in the npz, in the order the pipeline writes
+# them: the nuclei stage adds the first four, the GM/WM stage the last three.
+# main.py ends on the GM/WM stage whatever --entrypoint it started from, so all
+# seven are there after a complete run and only after one.
+NPZ_KEYS = ("thumbnail", "tissue_mask", "cells", "feature_heatmap",
+            "gm_mask", "wm_mask", "gmwm_contours")
 
 # Passed to ssh with -o so the script behaves the same for every user,
 # whether or not they have a ~/.ssh/config.
@@ -58,13 +73,14 @@ def _argument_builder():
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--csv",
-                        # sibling of this script in the repo, wherever it was cloned
-                        default=os.path.normpath(
-                            os.path.join(os.path.dirname(__file__), "server_inventory_ftld.csv")),
+                        # next to this script in the repo, wherever it was cloned
+                        default=os.path.join(os.path.dirname(__file__), INVENTORY_CSV),
                         help="path to the server inventory spreadsheet "
-                             "(default: server_inventory_ftld.csv next to this script)")
+                             f"(default: {INVENTORY_CSV} next to this script)")
     parser.add_argument("--region", nargs="+", default=REGIONS, help="regions to select")
     parser.add_argument("--antibody", nargs="+", default=ANTIBODIES, help="antibodies to select")
+    parser.add_argument("--pathology", nargs="+", default=PATHOLOGIES, choices=PATHOLOGIES,
+                        help="pathologies to select (default: all of them, i.e. no filtering)")
     parser.add_argument("--has-slide", default="True", choices=["True", "False"],
                         help="keep only rows with this HasSlide value")
     parser.add_argument("--chead-userid", required=True, help="chead username")
@@ -144,6 +160,8 @@ def check_slides(paths, flags, target):
 def log_path(args):
     """Log named after the selection, e.g. batch_log_MFC_AT8.txt."""
     selection = f"{'-'.join(args.region)}_{'-'.join(args.antibody)}"
+    if set(args.pathology) != set(PATHOLOGIES):   # unnarrowed selects everything, so leave it out
+        selection += f"_{'-'.join(args.pathology)}"
     return os.path.join(args.output_dir, f"batch_log_{selection}.txt")
 
 
@@ -165,6 +183,26 @@ def _hms(seconds):
     return f"{minutes // 60}h{minutes % 60:02d}m" if minutes >= 60 else f"{minutes}m"
 
 
+def npz_state(path):
+    """Is the output npz missing, unreadable, half-written, or complete?
+
+    Returns 'missing', 'corrupt', 'complete', or 'incomplete (<keys>)'.  Each
+    stage merges its arrays into whatever the npz already holds, so a slide
+    that died mid-pipeline leaves a perfectly readable file with only the early
+    keys in it -- the file existing is not proof the slide is done.
+    """
+    if not os.path.exists(path):
+        return "missing"
+    try:
+        # np.load reads the zip index only, so this stays cheap on big npzs.
+        with np.load(path, allow_pickle=False) as arrs:
+            absent = [key for key in NPZ_KEYS if key not in arrs.files]
+    except (OSError, EOFError, ValueError, zipfile.BadZipFile):
+        # zero bytes raises EOFError, a lopped-off zip index BadZipFile
+        return "corrupt"  # truncated or half-written: nothing to read back
+    return f"incomplete ({', '.join(absent)})" if absent else "complete"
+
+
 def run_batch(df, args, flags, target):
     """Download, process, and delete one slide at a time.  Returns a tally."""
     tally = {"success": 0, "failed": 0, "skipped": 0}
@@ -181,10 +219,18 @@ def run_batch(df, args, flags, target):
         out_dir = os.path.join(args.output_dir, row.Region, row.Antibody)
         npz = os.path.join(out_dir, os.path.splitext(slide)[0] + ".npz")
 
-        # skip if the npz already exists, meaning this slide has already been processed
-        if os.path.exists(npz):
+        # Skip only a complete npz; a partial one means the slide died partway
+        # through a previous run and has to go through again.
+        state = npz_state(npz)
+        if state == "complete":
             tally["skipped"] += 1
             continue
+        if state == "corrupt":
+            # If the NPZ is corrupted, delete and rerun below.
+            os.remove(npz)
+        if state != "missing":
+            # Logged so a re-run shows which slides it is redoing, and why.
+            log(args, f"[{n}/{len(df)}] {'REDO':<15} {slide}  ({state})")
 
         # Rate comes from the slides processed so far, so there is no ETA on the first one.
         elapsed = time.monotonic() - start
@@ -232,9 +278,10 @@ def main():
     # [1] Parse command line arguments
     args = _argument_builder()
 
-    # [2] Read the server inventory spreadsheet and filter rows by Region and Antibody
+    # [2] Read the server inventory spreadsheet and filter rows by Region, Antibody and Pathology
     df = pd.read_csv(args.csv)
-    df = df[df["Region"].isin(args.region) & df["Antibody"].isin(args.antibody)]
+    df = df[df["Region"].isin(args.region) & df["Antibody"].isin(args.antibody)
+            & df["Pathology"].isin(args.pathology)]
     df = df[df["HasSlide"] == (args.has_slide == "True")]
 
     # The log lives in --output-dir, so that has to exist before anything is logged.
@@ -243,6 +290,7 @@ def main():
     log(args, f"\n=== run started {time.strftime('%Y-%m-%d %H:%M:%S')} ===")
     log(args, f"Regions:    {args.region}")
     log(args, f"Antibodies: {args.antibody}")
+    log(args, f"Pathology:  {args.pathology}")
     log(args, f"HasSlide:   {args.has_slide}")
     log(args, f"Selected {len(df)} rows")
 

@@ -44,6 +44,9 @@ sana/
 # Ignore run_batch_script spreadsheet data
 # -------------------------------------------------
 run_batch_script/*.csv
+run_batch_script/**/*.csv
+run_batch_script/inventory_spreadsheets/spreadsheet_check.ipynb
+run_batch_script/copy_npz_to_chead.sh
 
 # -------------------------------------------------
 # Ignore evaluation result artifacts
