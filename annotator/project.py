@@ -170,7 +170,8 @@ class Project:
         self.user = user
         self.entries = entries if entries is not None else []
         self.created = created or datetime.datetime.now().isoformat(timespec="seconds")
-        self.qc = {}            # slide name -> (status, comments)
+        self.qc = {}            # slide name -> record
+        self.rated = set()      # slide names marked as having ratings
 
     # -- locations ----------------------------------------------------------
 
@@ -277,6 +278,16 @@ class Project:
     def qc_status(self, name):
         return self.qc_record(name)["status"]
 
+    # -- ratings ------------------------------------------------------------
+
+    def set_rated(self, name, rated):
+        """Flag a slide as having ratings. Kept in the manifest, not the sheet."""
+        self.rated.add(name) if rated else self.rated.discard(name)
+        self.save()
+
+    def is_rated(self, name):
+        return name in self.rated
+
     # -- lifecycle ----------------------------------------------------------
 
     @classmethod
@@ -307,6 +318,7 @@ class Project:
             created=data.get("created"),
         )
         project.qc = project.read_qc()
+        project.rated = set(data.get("rated", []))
         return project
 
     def save(self):
@@ -317,6 +329,7 @@ class Project:
             "user": self.user,
             "created": self.created,
             "entries": [e.to_dict() for e in self.entries],
+            "rated": sorted(self.rated),
         }
         with open(self.manifest_path, "w") as fp:
             json.dump(data, fp, indent=2)
@@ -408,6 +421,7 @@ class Project:
             if os.path.exists(path):
                 os.remove(path)
             self.qc.pop(entry.name, None)
+            self.rated.discard(entry.name)
             if entry in self.entries:
                 self.entries.remove(entry)
 

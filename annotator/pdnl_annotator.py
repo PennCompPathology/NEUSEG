@@ -40,6 +40,11 @@ import geojson
 import numpy as np
 import cv2
 
+# matplotlib picks its own Qt binding, and tries PyQt6 before PySide6. On a
+# machine with both installed the histogram canvas would come back as a PyQt6
+# widget, which no PySide6 layout will accept. Pin it before the backend loads.
+os.environ["QT_API"] = "pyside6"
+
 import matplotlib
 matplotlib.use('QtAgg')
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
@@ -164,18 +169,23 @@ CONTOUR_LEGEND = "".join(
 # the glyphs and the slide name keep the theme's ordinary colour
 QC_DISPLAY = {"Minor errors": "#ffd600", "Fail": "#d32f2f"}
 
-# the one-line tally above the slide list: glyph, colour, and what it counts
-SUMMARY_PARTS = (("no_log",  "\u26a0", None,      "no _log.pkl"),
-                 ("missing", "\u2717", None,      "archive not found"),
-                 ("minor",   "\u25a0", "#c8a200", "QC: minor errors"),
-                 ("fail",    "\u25a0", "#d32f2f", "QC: fail"),
-                 ("bad",     "\u2298", "#d32f2f", "bad tissue"))
-
 # bad tissue strikes the row through instead of taking the chip: the chip
 # carries the grade, so the two signals stay independent. Qt draws a font
 # strikeout in the text colour, which is why the name goes red with it.
 QC_BAD_TISSUE_COLOUR = "#d32f2f"
 QC_ICON_SIZE = 11
+
+# second chip slot: this slide has ratings recorded elsewhere
+RATED_COLOUR = "#1e88e5"
+
+# the one-line tally above the slide list: glyph, colour, and what it counts.
+# problems first, then progress
+SUMMARY_PARTS = (("no_log",  "\u26a0", None,         "no _log.pkl"),
+                 ("missing", "\u2717", None,         "archive not found"),
+                 ("minor",   "\u25a0", "#c8a200",    "QC: minor errors"),
+                 ("fail",    "\u25a0", "#d32f2f",    "QC: fail"),
+                 ("bad",     "\u2298", "#d32f2f",    "bad tissue"),
+                 ("rated",   "\u25a0", RATED_COLOUR, "has ratings"))
 
 # ROI names the app generated itself. Only these are renumbered on delete -
 # anything hand-typed is left as the user wrote it.
@@ -205,21 +215,28 @@ SHORTCUT_LEGEND = ("A / W  annotate \u00b7 ESC  cancel \u00b7 H  heatmap \u00b7 
                    "< >  slide  ")
 
 
-@functools.lru_cache(maxsize=8)
-def qc_icon(colour):
-    """A small filled square, cached: every row asks for one of two colours."""
-    pixmap = QPixmap(QC_ICON_SIZE, QC_ICON_SIZE)
+@functools.lru_cache(maxsize=16)
+def row_icon(qc_colour, rated):
+    """Up to two squares in fixed slots, so they line up down the column.
+
+    Slot one is the QC verdict, slot two the ratings marker; either may be
+    empty. Cached, since every row asks for one of a handful of combinations.
+    """
+    step = QC_ICON_SIZE + 3
+    pixmap = QPixmap(2 * step, QC_ICON_SIZE)
     pixmap.fill(Qt.transparent)
 
     qp = QPainter(pixmap)
     qp.setPen(QPen(QColor("#6b6b6b"), 1))
-    qp.setBrush(QColor(colour))
-    qp.drawRect(1, 1, QC_ICON_SIZE - 3, QC_ICON_SIZE - 3)
+    for slot, colour in ((0, qc_colour), (1, RATED_COLOUR if rated else None)):
+        if colour:
+            qp.setBrush(QColor(colour))
+            qp.drawRect(slot * step + 1, 1, QC_ICON_SIZE - 3, QC_ICON_SIZE - 3)
     qp.end()
     return QIcon(pixmap)
 
 
-def entry_row(entry, n_annotations, qc=prj.QC_EMPTY):
+def entry_row(entry, n_annotations, qc=prj.QC_EMPTY, rated=False):
     """Text, QC chip and tooltip for one row of the slide list.
 
     The three signals stay on separate channels so none hides another: import
@@ -235,9 +252,11 @@ def entry_row(entry, n_annotations, qc=prj.QC_EMPTY):
                                      "bad tissue" if qc["bad_tissue"] else ""]))
     if flags:
         tip = f"QC: {flags}\n{tip}"
+    if rated:
+        tip = f"Has ratings\n{tip}"
 
     return (f"{glyph} {mark:<3s} {entry.name}",
-            qc_icon(colour) if colour else QIcon(),
+            row_icon(colour, rated) if (colour or rated) else QIcon(),
             f"{tip}\n{done}\n{entry.npz_path}",
             qc["bad_tissue"])
 
@@ -1383,6 +1402,7 @@ class SlideAnnotator(QMainWindow):
             self.toggle_is_annotating()
         self.update_navigation_toolbar()
         self.select_slide_row(idx)
+        self.load_rated()
 
         # each slide keeps its own window per channel, so this restores what
         # was set here before, or opens at full range the first time
@@ -1834,6 +1854,10 @@ class SlideAnnotator(QMainWindow):
             "QPushButton:disabled { background-color: #b0b0b0; }" % RANGE_SLIDER_COLOUR)
         self.navigation_toolbar.addWidget(self.qc_button)
 
+        self.has_ratings = QCheckBox("Has Ratings")
+        self.has_ratings.stateChanged.connect(self.save_rated)
+        self.navigation_toolbar.addWidget(self.has_ratings)
+
         self.contour_legend = QLabel("   " + CONTOUR_LEGEND)
         self.navigation_toolbar.addWidget(self.contour_legend)
 
@@ -2034,6 +2058,21 @@ class SlideAnnotator(QMainWindow):
         self.refresh_roi_list()
         self.canvas.update()
 
+    # -- ratings ------------------------------------------------------------
+
+    def load_rated(self):
+        """Show this slide's flag without writing it straight back."""
+        self.has_ratings.blockSignals(True)
+        self.has_ratings.setChecked(self.project.is_rated(self.slide_name))
+        self.has_ratings.blockSignals(False)
+
+    def save_rated(self):
+        """Record the flag in the manifest and recolour the row."""
+        if self.project is None or self.slide_name is None:
+            return
+        self.project.set_rated(self.slide_name, self.has_ratings.isChecked())
+        self.refresh_slide_row()
+
     # -- quality control ----------------------------------------------------
 
     def show_qc_window(self):
@@ -2071,7 +2110,8 @@ class SlideAnnotator(QMainWindow):
         self.project_dock.widget.set_row(
             self.slide_idx, self.slide_entry,
             self.project.annotation_count(self.slide_entry),
-            self.project.qc_record(self.slide_name))
+            self.project.qc_record(self.slide_name),
+            self.project.is_rated(self.slide_name))
         self.project_dock.widget.update_summary(self.project)
 
     # -- removing slides ----------------------------------------------------
@@ -2439,7 +2479,8 @@ class ProjectWidget(QWidget):
             self.slide_list.addItem(item)
             self.set_row(self.slide_list.count() - 1, entry,
                          project.annotation_count(entry),
-                         project.qc_record(entry.name))
+                         project.qc_record(entry.name),
+                         project.is_rated(entry.name))
         self.slide_list.blockSignals(False)
         self.update_summary(project)
 
@@ -2459,6 +2500,8 @@ class ProjectWidget(QWidget):
                 counts["fail"] += 1
             if record["bad_tissue"]:
                 counts["bad"] += 1
+            if project.is_rated(entry.name):
+                counts["rated"] += 1
 
         flags = "".join(
             f'&nbsp; <span style="color:{colour}">{glyph}</span>{counts[key]}'
@@ -2466,13 +2509,13 @@ class ProjectWidget(QWidget):
             for key, glyph, colour, _ in SUMMARY_PARTS if counts[key])
         self.summary.setText(f"<b>{len(project.entries)}</b> slides{flags}")
 
-    def set_row(self, idx, entry, n_annotations, qc=prj.QC_EMPTY):
+    def set_row(self, idx, entry, n_annotations, qc=prj.QC_EMPTY, rated=False):
         """Fill in one row. Kept separate so a single slide can be refreshed
         after it is annotated, rather than re-reading every project file."""
         item = self.slide_list.item(idx)
         if item is None:
             return
-        text, icon, tip, struck = entry_row(entry, n_annotations, qc)
+        text, icon, tip, struck = entry_row(entry, n_annotations, qc, rated)
         item.setText(text)
         item.setToolTip(tip)
         # an empty icon clears the chip when a row stops being flagged
