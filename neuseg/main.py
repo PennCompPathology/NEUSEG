@@ -143,7 +143,7 @@ def main():
             logger=logger, output_path=output_path,
             **vars(args)
         )
-    if args.entrypoint == 'cortex' or layers is None:
+    if (args.entrypoint == 'cortex' or layers is None) and args.debug_level == "full":
         gm_mask, wm_mask, cortical_angles = measure_cortical_angles(
             gm_mask=gm_mask, wm_mask=wm_mask, tissue_mask=tissue_mask, 
             tb=thumbnail, cells=cells,
