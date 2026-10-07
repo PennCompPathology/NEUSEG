@@ -61,6 +61,14 @@ def preprocess_counterstain_chunk(tmp_directory, j, i, input_slide, staining_cod
             normalize_background=True, radius=300.0, overlap=0.50,
         )
         counterstain = processor.cv
+    elif staining_code == 'LFBCV':
+        processor = sana.process.LFBCVProcessor(
+            logger, frame, main_mask=mask,
+            run_cv=True, run_lfb=False,
+            apply_smoothing=True,
+            normalize_background=True, radius=300.0, overlap=0.50,
+        )
+        counterstain = processor.cv
     else:
         logger.error(f'STAINING CODE NOT RECOGNIZED -- {staining_code}')
         return

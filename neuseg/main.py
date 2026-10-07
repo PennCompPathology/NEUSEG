@@ -48,7 +48,7 @@ def main():
                         required=True)
     parser.add_argument('--staining_code', 
                         help="how the WSI was stained", 
-                        default='HDAB', choices=['HDAB', 'CVDAB'])
+                        default='HDAB', choices=['HDAB', 'CVDAB', 'LFBCV'])
     parser.add_argument('--n_cores',                         
                         help="multiprocessing cpu cores to use", 
                         type=int, default=1)
@@ -100,13 +100,13 @@ def main():
     print(logger.data)
     if os.path.exists(output_path):
         arrs = np.load(output_path)
-        if 'thumbnail' in arrs:
+        if 'thumbnail' in arrs and 'level' in logger.data:
             level = logger.data['level']
             converter = sana.geo.Converter(logger.data['mpp'], logger.data['ds'])
             thumbnail = sana.image.Frame(arrs['thumbnail'], level=level, converter=converter)
         else:
             thumbnail = None
-        if 'tissue_mask' in arrs:
+        if 'tissue_mask' in arrs and not thumbnail is None:
             tissue_mask = sana.image.frame_like(thumbnail, arrs['tissue_mask'])
         cells = arrs['cells'] \
             if 'cells' in arrs else None
