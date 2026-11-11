@@ -35,7 +35,7 @@ import pdnl_sana.quantify
 from .nuclei import segment_nuclei_wsi, aggregate_nuclei_features
 from .tissue import segment_wm
 
-NEUSEG_VERSION = "v1_0"
+NEUSEG_VERSION = "v1_1"
 
 def main():
     parser = argparse.ArgumentParser()
@@ -48,6 +48,13 @@ def main():
     parser.add_argument('--staining_code', 
                         help="how the WSI was stained", 
                         default='HDAB', choices=['HDAB', 'CVDAB'])
+    # store_true already implies default=False; it is spelled out because the stain
+    # handling is the one setting worth reading off this block without inference.
+    parser.add_argument('--subtract_dab',
+                        help="subtract DAB from HEM before segmenting nuclei (the v1_0 "
+                             "behaviour); default is raw HEM, which holds up on DAB-heavy "
+                             "slides",
+                        action='store_true', default=False)
     parser.add_argument('--n_cores',                         
                         help="multiprocessing cpu cores to use", 
                         type=int, default=1)
@@ -84,6 +91,10 @@ def main():
     logger_fpath = os.path.join(args.output_directory, slide_name+'_log.pkl')
     logger = pdnl_sana.logging.Logger(args.debug_level, logger_fpath, name="NEUSEG")
     logger.data['VERSION'] = NEUSEG_VERSION
+    # Recorded so an npz's stain handling is readable off its _log.pkl afterwards,
+    # rather than inferred from a directory name.
+    logger.data['staining_code'] = args.staining_code
+    logger.data['subtract_dab'] = args.subtract_dab
 
     output_path = os.path.join(args.output_directory, slide_name+'.npz')
     logger.debug(f'Saving outputs to {args.output_directory}')

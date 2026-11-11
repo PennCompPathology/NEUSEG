@@ -48,6 +48,12 @@ INVENTORY_CSV = os.path.join("inventory_spreadsheets", "server_inventory_v2.csv"
 REGIONS = ["AMY", "ANG", "HIP", "LENT", "MFC", "OFC", "SMTC", "STRI", "aCING"]
 ANTIBODIES = ["AT8", "CD68", "GFAP", "HLADR", "IBA1", "MJFR13", "Nab228", "NeuN", "SMI32", "TDP43"]
 PATHOLOGIES = ["AD", "Control", "FTLD-TDP", "FTLD-Tau", "LBD"]
+# How the nuclei stage treats the stain.  False segments on raw hematoxylin, which
+# is what main.py defaults to from v1_1 on; True reproduces v1_0's HEM - DAB, which
+# loses signal on DAB-heavy slides.  Stated here rather than left implicit, so the
+# stain handling of a batch is readable from this file.  --subtract_dab is a
+# store_true flag, so False means passing nothing at all.
+SUBTRACT_DAB = False
 CHEAD_HOST = "chead.uphs.upenn.edu"
 # Every key a finished run leaves in the npz, in the order the pipeline writes
 # them: the nuclei stage adds the first four, the GM/WM stage the last three.
@@ -254,6 +260,7 @@ def run_batch(df, args, flags, target):
                             "--n_cores", str(args.n_cores),
                             "--entrypoint", args.entrypoint,
                             "--staining_code", args.staining_code,
+                            *(["--subtract_dab"] if SUBTRACT_DAB else []),
                             "--debug_level", args.debug_level], check=True)
             tally["success"] += 1
         except subprocess.CalledProcessError as error:
@@ -315,6 +322,7 @@ def main():
         log(args, f"  n_cores:     {args.n_cores}")
         log(args, f"  entrypoint:  {args.entrypoint}")
         log(args, f"  staining:    {args.staining_code}")
+        log(args, f"  subtract_dab:{SUBTRACT_DAB}   ({'HEM - DAB' if SUBTRACT_DAB else 'raw HEM'})")
         log(args, f"  debug_level: {args.debug_level}")
 
         # Run NEUSEG on each slide, one at a time, downloading and deleting each slide in turn.

@@ -56,8 +56,7 @@ evaluation/eval_results/
 # -------------------------------------------------
 # Ignore Debugging artifacts
 # -------------------------------------------------
-debug/tissue_extraction_debug/
-debug/SANA.log
+debug/
 
 # -------------------------------------------------
 # Ignore .DS_Store

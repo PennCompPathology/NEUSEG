@@ -16,7 +16,8 @@ from .tissue import get_tissue_mask, segment_wm
 
 from matplotlib import pyplot as plt
 
-def preprocess_counterstain_chunk(tmp_directory, j, i, input_slide, staining_code, level, size, rois, roi_holes):
+def preprocess_counterstain_chunk(tmp_directory, j, i, input_slide, staining_code, level, size,
+                                  rois, roi_holes, subtract_dab=False):
     """
     This function applies color deconvolution to an RGB chunk and saves the stain information
     """
@@ -48,10 +49,13 @@ def preprocess_counterstain_chunk(tmp_directory, j, i, input_slide, staining_cod
         processor = sana.process.HDABProcessor(
             logger, frame, main_mask=mask, 
             run_hem=True, run_dab=False,
+            subtract_dab=subtract_dab,
             apply_smoothing=False, 
             normalize_background=True, radius=300.0, overlap=0.50,
         )
         counterstain = processor.hem
+    # subtract_dab applies to HDAB only -- CVDABProcessor has no such parameter,
+    # so this branch always uses the raw cresyl-violet channel.
     elif staining_code == 'CVDAB':
         processor = sana.process.CVDABProcessor(
             logger, frame, main_mask=mask,
@@ -167,6 +171,7 @@ def segment_nuclei_wsi(
     logger: sana.logging.Logger=None, 
     output_path: str=None, 
     staining_code='HDAB',
+    subtract_dab: bool=False,
     minimum_soma_radius: float=2.0, maximum_soma_radius: float=10.0,
     tmp_directory: str=None, 
     level: int=0, frame_size: int=1024, n_cores: int=1, **kwargs):
@@ -176,6 +181,7 @@ def segment_nuclei_wsi(
     :param input_slide: path to WSI image file
     :param output_path: optional path to .npz file to write outputs to
     :param staining_code: how the WSI was stained
+    :param subtract_dab: subtract DAB from HEM before segmenting (HDAB only)
     :param minimum_soma_radius: microns
     :param maximum_soma_radius: microns
     :param tmp_directory: optionally cache data to a local directory for inspection, NOTE that NEUSEG does not clean up this data for you
@@ -226,6 +232,7 @@ def segment_nuclei_wsi(
     job_args = [{
         'tmp_directory': tmp_directory, 'j': j, 'i': i, 
         'input_slide': input_slide, 'staining_code': staining_code,
+        'subtract_dab': subtract_dab,
         'level': level, 'size': frame_size, 
         'rois': rois, 'roi_holes': roi_holes,
         } for j, i in frame_idxs]
